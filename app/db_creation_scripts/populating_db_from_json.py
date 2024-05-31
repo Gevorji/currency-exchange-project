@@ -2,7 +2,7 @@ import json
 import sqlite3
 import sys
 
-currencies_json = json.load(open('currencies.json'))
+currencies_json = json.load(open('currency-format.json', 'rb'))
 
 db_name = sys.argv[1]
 
@@ -11,10 +11,9 @@ cur = conn.cursor()
 
 for currency_code in currencies_json:
     db_record = (currency_code, currencies_json[currency_code]['name'],
-                 currencies_json[currency_code]['units']['major']['symbol'])
+                 currencies_json[currency_code]['symbol']['grapheme'])
 
     cur.execute('INSERT INTO currency(code, full_name, currency_sign) VALUES (?,?,?)', db_record)
 
 conn.commit()
 conn.close()
-cur.execute('INSERT INTO currency(code, full_name, currency_sign) VALUES ('AUD','aUSTRALLIAN DOLL', '$')')
