@@ -1,4 +1,7 @@
 import sqlite3
+from urllib.request import urlopen
+from utils import rates_obtaining_from_cbr_website as rates_source
+
 
 DB_NAME = 'currencydb.db'
 
@@ -46,5 +49,19 @@ def get_exchange_rates():
 def get_exchange_rate_for_pair(currency1, currency2):
 
     res = db_cursor.execute('SELECT ')
+
+
+def get_resource_from_web_using_http(url: str):
+
+    return urlopen(url).read()
+
+
+def insert_currency_rates(obtainer_func):
+    db_cursor.execute('DELETE FROM exchange_rates')
+    rates = tuple(obtainer_func())
+
+    db_cursor.executemany('INSERT INTO exchange_rates(base_currency_id, target_currency_id, rate) VALUES (?, ?, ?)',
+                          rates)
+
 
 

@@ -1,0 +1,53 @@
+from urllib.request import urlopen
+from html_table_parser import HtmlTableDataExtractor
+from rate_calculations import CurrencyRate, complete_building_set_of_rates
+
+SOURCE_URL = 'http://www.cbr.ru/currency_base/daily/'
+COMMON_TARGET_CURRENCY_CODE = 'RUB'
+DAYS_VALID = 1
+RATE_PRECISION = 4
+
+
+def obtain_rates(url: str = SOURCE_URL):
+
+    html = urlopen(url).read().decode('utf-8')
+
+    yield from (prepare_for_insertion_into_db(rate) for rate in process_data_from_html_table(html))
+
+
+def prepare_for_insertion_into_db(data_obj: CurrencyRate):
+
+    return (data_obj.base_currency_code, data_obj.target_currency_code,
+            round(data_obj.rate, RATE_PRECISION))
+
+
+def process_data_from_html_table(html):
+
+    parser = HtmlTableDataExtractor()
+
+    data = parser.feed(html)
+    rates = []
+
+    for table in data:
+        for record in table[1:]:  # TODO: do headers row recognition
+            data_obj = make_data_object(record)
+            rates.append(data_obj)
+
+    yield from complete_building_set_of_rates(rates)
+
+
+def make_data_object(data: tuple):
+    # Responsible for constructing valid data object depending on record structure
+    __, base_currency_code, units, _, rate = data
+
+    # string preparations
+    rate = rate.replace(',', '.')
+
+    return CurrencyRate(base_currency_code, COMMON_TARGET_CURRENCY_CODE, int(units), float(rate))
+
+
+if __name__ == '__main__':
+    rates = list(obtain_rates(SOURCE_URL))
+    for rate in rates:
+        print(rate[0], rate[1])
+    print(len(rates))
