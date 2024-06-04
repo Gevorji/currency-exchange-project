@@ -1,7 +1,5 @@
 import sqlite3
 from urllib.request import urlopen
-from utils import rates_obtaining_from_cbr_website as rates_source
-
 
 DB_NAME = 'currencydb.db'
 

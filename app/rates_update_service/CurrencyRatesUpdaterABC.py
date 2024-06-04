@@ -1,5 +1,6 @@
 import sqlite3
 import datetime
+from abc import ABC, abstractmethod
 
 
 def adapt_date_iso(val):
@@ -9,15 +10,14 @@ def adapt_date_iso(val):
 sqlite3.register_adapter(datetime.date, adapt_date_iso)
 
 
-class CurrencyRatesUpdater:
+class CurrencyRatesUpdater(ABC):
     """
     Provides functionality for keeping currency rates up-to-date in application's database
     """
     __db_details_specs = ('table_name', '', 'pk_field',  'last_appeal_data_field', 'days_valid_field', 'path_field',
                           'type_field')
 
-    def __init__(self, conn, source_id, db_details: dict, data_obtain_callable):
-        self.__data_fetcher = data_obtain_callable
+    def __init__(self, conn, source_id, db_details: dict):
         self.__connection: sqlite3.Connection = conn
         self.__db_cursor: sqlite3.Cursor = self.__connection.cursor()
 
@@ -39,11 +39,21 @@ class CurrencyRatesUpdater:
 
         return True if last_appeal + days_valid <= datetime.date.today() else False
 
-    def update_from_source(self, source_id):
+    @abstractmethod
+    def update(self, source_id):
+        pass
+
+    @abstractmethod
+    def obtain_data(self):
+        pass
+
+    @abstractmethod
+    def fill_table_with_data(self):
+        pass
+
+    def get_path_to_source(self):
         details = self.__db_details
 
         res = self.__db_cursor.execute('SELECT :path_field FROM :table_name WHERE :pk_field = :source_id',
                                        details).fetchone()
-        path = res[0]
-
-        rates = tuple(self.__data_fetcher(path))
+        return res[0]
