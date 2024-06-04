@@ -56,7 +56,9 @@ def get_resource_from_web_using_http(url: str):
     return urlopen(url).read()
 
 
-def insert_currency_rates(obtainer_func):
+def init_insert_currency_rates(obtainer_func, *, force=False):
+    if not force:
+        r = db_cursor.execute('DELETE FROM exchange_rates')
     db_cursor.execute('DELETE FROM exchange_rates')
     rates = tuple(obtainer_func())
 

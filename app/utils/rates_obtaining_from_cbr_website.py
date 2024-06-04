@@ -16,7 +16,9 @@ def obtain_rates(url: str = SOURCE_URL):
 
 
 def prepare_for_insertion_into_db(data_obj: CurrencyRate):
-
+    """
+    Transforms data obj into a row valid for insertion into DB.
+    """
     return (data_obj.base_currency_code, data_obj.target_currency_code,
             round(data_obj.rate, RATE_PRECISION))
 
