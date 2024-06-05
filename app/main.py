@@ -1,6 +1,8 @@
 import sqlite3
 from urllib.request import urlopen
 
+from app.data_objects import CurrencyRate
+
 DB_NAME = 'currencydb.db'
 
 db_connection = sqlite3.connect(DB_NAME)
@@ -64,4 +66,14 @@ def init_insert_currency_rates(obtainer_func, *, force=False):
                           rates)
 
 
+def update_rate(rate_data: CurrencyRate):
+    sql = '''
+    UPDATE exchange_rates SET rate=?, info_source=?
+    WHERE base_currency_id = (SELECT currency_id FROM currency WHERE code=?) AND 
+          target_currency_id = (SELECT currency_id FROM currency WHERE code=?)
+    '''
 
+    db_cursor.execute(sql, (rate_data.rate, rate_data.info_source,
+                            rate_data.base_currency_code, rate_data.target_currency_code))
+
+def add_rate(rated_data: CurrencyRate): pass

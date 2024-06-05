@@ -1,7 +1,8 @@
 from urllib.request import urlopen
 
-from utils.html_table_parser import HtmlTableDataExtractor
-from utils.rate_calculations import CurrencyRate, complete_building_set_of_rates
+from app.utils.html_table_parser import HtmlTableDataExtractor
+from app.utils.rate_calculations import complete_building_set_of_rates
+from app.data_objects import CurrencyRate
 
 
 SOURCE_URL = 'http://www.cbr.ru/currency_base/daily/'

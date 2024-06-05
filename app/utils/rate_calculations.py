@@ -1,30 +1,7 @@
 from itertools import combinations
-from dataclasses import dataclass
 from typing import Sequence
 
-
-@dataclass
-class CurrencyRate:
-    base_currency_code: str
-    target_currency_code: str
-    units: int
-    rate: int | float
-
-    @property
-    def reduced_rate(self):
-
-        return self.rate/self.units
-
-    @property
-    def reciprocal_rate(self):
-
-        return 1/self.rate
-
-    @property
-    def r_reciprocal_rate(self):
-
-        return self.units/self.rate
-
+from app.data_objects import CurrencyRate
 
 def calculate_rate_depending_on_base_rates(target1_to_base_rate: float | int, target2_to_base_rate: float | int):
 
