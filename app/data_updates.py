@@ -1,7 +1,7 @@
 import sqlite3
 import datetime
-from abc import ABC, abstractmethod
 
+from app.data_objects import CurrencyRate
 
 def adapt_date_iso(val):
     return val.isoformat()
@@ -10,24 +10,32 @@ def adapt_date_iso(val):
 sqlite3.register_adapter(datetime.date, adapt_date_iso)
 
 
-class CurrencyRatesUpdater(ABC):
+class CurrencyRatesUpdater:
+    __instances = []
     """
     Provides functionality for keeping currency rates up-to-date in application's database
     """
     __db_details_specs = ('table_name', '', 'pk_field',  'last_appeal_data_field', 'days_valid_field', 'path_field',
                           'type_field')
 
-    def __init__(self, conn, source_id, db_details: dict):
+    def __init__(self, conn, source_id, fetcher_procedure, db_details: dict):
         self.__connection: sqlite3.Connection = conn
         self.__db_cursor: sqlite3.Cursor = self.__connection.cursor()
+
+        assert source_id not in [inst.source_id for inst in getattr(self, f'_{self.__class__.__name__}__instances')], \
+            'The updater on this source has been set already'
 
         assert set(self.__db_details_specs) & set(db_details.keys()) == set(self.__db_details_specs), \
             'One of the required database specification parameters is missing'
 
-        db_details['source_id'] = source_id
         assert self.__db_cursor.execute('SELECT * FROM :table_name WHERE :pk_field = :source_id').fetchone(), \
             f'No source in table with {source_id=}'
+
         self.__db_details = db_details
+        self.source_id = source_id
+        self.fetch_data = fetcher_procedure
+
+        getattr(self, f'_{self.__class__.__name__}__instances').append(self)
 
     def update_is_needed(self):
         details = self.__db_details
@@ -39,17 +47,13 @@ class CurrencyRatesUpdater(ABC):
 
         return True if last_appeal + days_valid <= datetime.date.today() else False
 
-    @abstractmethod
-    def update(self, source_id):
-        pass
-
-    @abstractmethod
     def obtain_data(self):
-        pass
+        path = self.get_path_to_source()
 
-    @abstractmethod
-    def fill_table_with_data(self):
-        pass
+        def preparer(rate: CurrencyRate):
+            rate.info_source = self.source_id
+
+        yield from (preparer(rate) for rate in self.fetch_data())
 
     def get_path_to_source(self):
         details = self.__db_details

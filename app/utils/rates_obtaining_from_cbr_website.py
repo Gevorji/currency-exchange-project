@@ -11,11 +11,14 @@ DAYS_VALID = 1
 RATE_PRECISION = 4
 
 
-def obtain_rates(url: str = SOURCE_URL):
+def obtain_rates(url: str = SOURCE_URL, prepare_func=None):
 
     html = urlopen(url).read().decode('utf-8')
 
-    yield from (prepare_for_insertion_into_db(rate) for rate in process_data_from_html_table(html))
+    data = (prepare_for_insertion_into_db(rate) for rate in process_data_from_html_table(html)) \
+        if prepare_func else process_data_from_html_table(html)
+
+    yield from data
 
 
 def prepare_for_insertion_into_db(data_obj: CurrencyRate):

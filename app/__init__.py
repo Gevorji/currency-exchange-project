@@ -1,1 +1,1 @@
-from app.rates_update_service import rates_obtaining_from_cbr_website
+from app.utils import rates_obtaining_from_cbr_website
