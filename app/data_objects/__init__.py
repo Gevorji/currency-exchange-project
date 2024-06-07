@@ -1,3 +1,5 @@
-from app.data_objects.CurrencyRate import CurrencyRate
+from CurrencyRate import CurrencyRate
+from Currency import Currency
 
-__all__ = ['CurrencyRate']
+
+

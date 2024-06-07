@@ -1,7 +1,9 @@
 import sqlite3
 import datetime
+from typing import Callable
 
 from app.data_objects import CurrencyRate
+
 
 def adapt_date_iso(val):
     return val.isoformat()
@@ -18,7 +20,8 @@ class CurrencyRatesUpdater:
     __db_details_specs = ('table_name', '', 'pk_field',  'last_appeal_data_field', 'days_valid_field', 'path_field',
                           'type_field')
 
-    def __init__(self, conn, source_id, fetcher_procedure, db_details: dict):
+    def __init__(self, conn, source_id, fetcher_procedure: Callable, update_interface: Callable, db_details: dict):
+        self.__update_interface = update_interface
         self.__connection: sqlite3.Connection = conn
         self.__db_cursor: sqlite3.Cursor = self.__connection.cursor()
 
@@ -61,3 +64,18 @@ class CurrencyRatesUpdater:
         res = self.__db_cursor.execute('SELECT :path_field FROM :table_name WHERE :pk_field = :source_id',
                                        details).fetchone()
         return res[0]
+
+    def update(self):
+
+        data = self.obtain_data()
+
+        for rate in data:
+            self.__update_interface(rate)
+
+        datestamp = datetime.date.today()
+        details = self.__db_details.copy()
+        details['datestamp'] = datestamp
+        details['source_id'] = self.source_id
+        sql = '''UPDATE :table_name SET :last_appeal_data_field = :datestamp WHERE :pk_field = :source_id'''
+        self.__db_cursor.execute(sql, details)
+

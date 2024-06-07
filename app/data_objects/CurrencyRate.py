@@ -1,13 +1,14 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 
 @dataclass
 class CurrencyRate:
-    base_currency_code: str
-    target_currency_code: str
-    units: int
-    rate: int | float
-    info_source: int = None
+    id: int | None = field(default=None)
+    base_currency_code: str | None = field(default=None)
+    target_currency_code: str | None = field(default=None)e
+    units: int | None = field(default=None)
+    rate: int | float | None = field(default=None)
+    info_source: int | None = field(default=None)
 
     @property
     def reduced_rate(self):
@@ -23,3 +24,4 @@ class CurrencyRate:
     def r_reciprocal_rate(self):
 
         return self.units/self.rate
+

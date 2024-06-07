@@ -1,22 +1,32 @@
 import sqlite3
 from urllib.request import urlopen
 
-from app.data_objects import CurrencyRate
+from app.data_objects import CurrencyRate, Currency
 
-DB_NAME = 'currencydb.db'
+CONNECTION: sqlite3.Connection | None = None
+db_cursor: sqlite3.Cursor | None = None
 
-db_connection = sqlite3.connect(DB_NAME)
-db_cursor = db_connection.cursor()
+
+def set_connection(db_connection: sqlite3.Connection):
+    global CONNECTION
+    global db_cursor
+    CONNECTION = db_connection
+    db_cursor = CONNECTION.cursor()
+
+
+def build_sql_query_params_line(params: dict):
+    return ', '.join(key + ' = ?' for key in params.keys())
 
 
 def get_all_currencies():
 
     res = db_cursor.execute('SELECT * FROM currency').fetchall()
 
-    return res
+    return tuple(Currency(*rec) for rec in res)
 
 
-def get_currency_by_id(_id):
+def get_currency(currency: Currency):
+    params = dict()
 
     res = db_cursor.execute('SELECT * FROM currency WHERE currency_id=?', (_id,)).fetchone()
 
