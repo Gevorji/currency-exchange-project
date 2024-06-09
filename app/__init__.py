@@ -1,1 +1,0 @@
-from app.utils import rates_obtaining_from_cbr_website

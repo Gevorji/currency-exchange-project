@@ -51,7 +51,7 @@ def make_data_object(data: tuple):
     # string preparations
     rate = rate.replace(',', '.')
 
-    return CurrencyRate(base_currency_code, COMMON_TARGET_CURRENCY_CODE, int(units), float(rate))
+    return CurrencyRate(None, base_currency_code, COMMON_TARGET_CURRENCY_CODE, int(units), float(rate), None)
 
 
 if __name__ == '__main__':
