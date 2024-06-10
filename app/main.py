@@ -220,8 +220,7 @@ def add_exchange_rate(rate: CurrencyRate):
     identity = dict_remove_none_val_items(dict(base_currency_id=params.get('base_currency_code'),
                                                target_currency_id=params.get('target_currency_code')))
 
-    assert len(identity) == 2, ('No any identity set of fields in data object to fetch data. '
-                                'Either id of rate or base+target currencies should be given')
+    assert len(identity) == 2, 'Base and target currency codes should be given'
 
     substitute_keys(params, CURRENCY_RATE_FIELDS_TO_DB_MAP)
 
