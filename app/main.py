@@ -18,6 +18,9 @@ CURRENCY_RATE_FIELDS_TO_DB_MAP = {
     'id': 'exchange_rate_id'
 }
 
+FIND_RATE_BY_RECIPROCAL = 0b001
+FIND_RATE_BY_COMMON_TARGET = 0b010
+
 
 def set_connection(db_connection: sqlite3.Connection):
     global CONNECTION
@@ -129,7 +132,7 @@ def get_all_exchange_rates():
     return tuple(CurrencyRate(*rec) for rec in res)
 
 
-def get_exchange_rate(rate: CurrencyRate):
+def get_exchange_rate(rate: CurrencyRate, *, strategy: int = 0):
     """ERRORS:
     - no idenitity fields were given
     - no such rate in DB
@@ -162,7 +165,15 @@ def get_exchange_rate(rate: CurrencyRate):
 
     res = db_cursor.execute(sql, identity).fetchone()
 
-    return CurrencyRate(*res[:3], 1, res[3], res[-1]) if res else None
+    if res:
+        return CurrencyRate(*res[:3], 1, res[3], res[-1])
+
+    elif FIND_RATE_BY_RECIPROCAL & strategy == FIND_RATE_BY_RECIPROCAL:
+        try:
+            res = get_exchange_rate(CurrencyRate(None, identity['target_currency_id'],
+                                                 identity['target_currency_id'], None, None, None))
+        except KeyError:
+            raise AssertionError('Cant use reciprocal fetching strategy when no both base and target codes were given')
 
 
 def update_exchange_rate(rate: CurrencyRate):
@@ -261,6 +272,3 @@ def count_exchange(fromcur: Currency, tocur: Currency, amount):
     # rate = get_exchange_rate(CurrencyRate(None, base_cur_identity, target_cur_identity, None, None, None))
 
     return base_cur, target_cur, rate, rate.rate * amount
-
-
-

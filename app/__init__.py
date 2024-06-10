@@ -8,7 +8,6 @@ from main import (get_all_currencies, get_all_exchange_rates, get_currency,
 
 from data_updates import CurrencyRatesUpdater
 
-
 db_specs = json.load(open('dbspecs.json'))
 
 connection = sqlite3.connect(db_specs['db_fname'])
@@ -20,6 +19,9 @@ def wrapper_for_transaction(db_procedure):
     @wraps(db_procedure)
     def transaction_wrapper(*args, **kwargs):
         with connection:
-            db_procedure(*args, **kwargs)
+            res = db_procedure(*args, **kwargs)
+        return res
+    return
+
 
 
