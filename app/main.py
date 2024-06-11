@@ -139,19 +139,19 @@ def get_exchange_rate(rate: CurrencyRate, *, strategy: int = 0):
     """
     params = dict_remove_none_val_items(asdict(rate))
 
-    identity = (dict_remove_none_val_items(dict(id=params.get('id'))) or
-                dict_remove_none_val_items(dict(base_currency_id=params.get('base_currency_code'),
-                                                target_currency_id=params.get('target_currency_code'))))
+    by_id = 'id' in params
 
-    any_identity_set_is_given = ('id' in identity or
-                                 ('base_currency_code' in identity and 'target_currency_code' in identity))
+    by_cur_codes = 'base_currency_code' in params and 'target_currency_code' in params
 
-    assert any_identity_set_is_given, ('No any identity set of fields in data object to fetch data. '
-                                       'Either id of rate or base+target currencies should be given')
+    assert by_id or by_cur_codes, ('No any identity set of fields in data object to fetch data. '
+                                   'Either id of rate or base+target currencies should be given')
 
-    substitute_keys(identity, CURRENCY_RATE_FIELDS_TO_DB_MAP)
+    substitute_keys(params, CURRENCY_RATE_FIELDS_TO_DB_MAP)
 
-    if len(identity) == 1:
+    identity = dict(id=params.get('id') if by_id else dict(base_currency_id=params.get('base_currency_code'),
+                                                target_currency_id=params.get('target_currency_code')))
+
+    if by_id:
         param_line = build_sql_query_params_line(identity, '')
     else:
         param_line = 'b.code = :base_currency_code AND t.code = :target_currency_code'
@@ -168,12 +168,32 @@ def get_exchange_rate(rate: CurrencyRate, *, strategy: int = 0):
     if res:
         return CurrencyRate(*res[:3], 1, res[3], res[-1])
 
+    elif not by_cur_codes and strategy != 0:
+        raise AssertionError('Cant use any tricky fetching strategies when no both base and target codes were given')
+
     elif FIND_RATE_BY_RECIPROCAL & strategy == FIND_RATE_BY_RECIPROCAL:
-        try:
-            res = get_exchange_rate(CurrencyRate(None, identity['target_currency_id'],
-                                                 identity['target_currency_id'], None, None, None))
-        except KeyError:
-            raise AssertionError('Cant use reciprocal fetching strategy when no both base and target codes were given')
+        res = get_exchange_rate(CurrencyRate(None, identity['target_currency_code'],
+                                             identity['base_currency_code'], None, None, None))
+        if res:
+            return res.reciprocal_rate
+
+    elif FIND_RATE_BY_COMMON_TARGET & strategy == FIND_RATE_BY_COMMON_TARGET:
+        identity = {k: v for k, v in params.items() if k in ('base_currency_code', 'target_currency_code')}
+        ids = db_cursor.execute(
+            '''
+            SELECT currency_id
+            FROM currency
+            WHERE code = ?
+            ''', (params['base_currency_code'], params['target_currency_code']))
+
+        base_id, target_id = tuple(rec[0] for rec in ids.fetchall())
+
+        base_pares = db_cursor.execute(
+            '''
+            SELECT target_currency_id
+            FROM currency
+            WHERE base_currency_id = ?
+            ''')
 
 
 def update_exchange_rate(rate: CurrencyRate):
