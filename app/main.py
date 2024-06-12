@@ -71,7 +71,7 @@ def get_currency(currency: Currency):
     """
     params = dict_remove_none_val_items(asdict(currency))
 
-    identity = dict(id=params.get('currrency_id'), code=params.get('code'))
+    identity = dict(id=params.get('currency_id'), code=params.get('code'))
 
     substitute_keys(identity, CURRENCY_FIELDS_TO_DB_MAP)
 
@@ -81,7 +81,7 @@ def get_currency(currency: Currency):
 
     rec = db_cursor.execute(sql, params).fetchone()
 
-    return Currency(*rec)
+    return Currency(*rec) if rec else None
 
 
 def update_currency(currency: Currency):
@@ -99,8 +99,14 @@ def update_currency(currency: Currency):
 
     assert identity, 'No identity fields in data object to make update'
 
+    params_line = build_sql_query_params_line(identity, ' AND ')
+
+    cur_exists = db_cursor.execute('SELECT 1 FROM currency WHERE ' + params_line).fetchone()
+    if not cur_exists:
+        raise NoRecordToModify(f'No record corresponding to {currency}')
+
     sql = 'UPDATE currency SET ' + build_sql_query_params_line(identity, ', ') + \
-          ' WHERE ' + build_sql_query_params_line(params, ' AND ') + ' RETURNING *'
+          ' WHERE ' + params_line
     params.update(identity)
 
     rec = db_cursor.execute(sql, params)
@@ -115,7 +121,13 @@ def add_currency(currency: Currency):
     sql = 'INSERT INTO currency(code, full_name, currency_sign) VALUES (?,?,?) RETURNING *'
     # TODO: is RETURNING * statement returning all field of the inserted row?
 
-    res = db_cursor.execute(sql, (currency.code, currency.full_name, currency.sign)).fetchone()
+    try:
+        res = db_cursor.execute(sql, (currency.code, currency.full_name, currency.sign)).fetchone()
+    except sqlite3.Error as e:
+        if e.sqlite_errorcode == 2067:
+            raise RecordOfSuchIdentityExists(f'Record with the same identity as {currency} already exists in database.')
+        else:
+            raise
 
     return res
 
@@ -149,7 +161,7 @@ def get_exchange_rate(rate: CurrencyRate, *, strategy: int = 0):
     substitute_keys(params, CURRENCY_RATE_FIELDS_TO_DB_MAP)
 
     identity = dict(id=params.get('id') if by_id else dict(base_currency_id=params.get('base_currency_code'),
-                                                target_currency_id=params.get('target_currency_code')))
+                                                           target_currency_id=params.get('target_currency_code')))
 
     if by_id:
         param_line = build_sql_query_params_line(identity, '')
@@ -178,7 +190,6 @@ def get_exchange_rate(rate: CurrencyRate, *, strategy: int = 0):
             return res.reciprocal_rate
 
     elif FIND_RATE_BY_COMMON_TARGET & strategy == FIND_RATE_BY_COMMON_TARGET:
-        identity = {k: v for k, v in params.items() if k in ('base_currency_code', 'target_currency_code')}
         ids = db_cursor.execute(
             '''
             SELECT currency_id
@@ -188,12 +199,41 @@ def get_exchange_rate(rate: CurrencyRate, *, strategy: int = 0):
 
         base_id, target_id = tuple(rec[0] for rec in ids.fetchall())
 
-        base_pares = db_cursor.execute(
-            '''
-            SELECT target_currency_id
-            FROM currency
+        # TODO: unclear about the order of the returned rates
+        sql = '''
+            WITH common_cur AS 
+            (SELECT target_currency_id AS id
+            FROM exchange_rates
             WHERE base_currency_id = ?
-            ''')
+            INTERSECT 
+            SELECT target_currency_id AS id
+            FROM exchange_rates
+            WHERE base_currency_id = ?
+            LIMIT 1)
+            SELECT rate
+            FROM exchange_rates
+            WHERE base_currency_id = ? AND target_currency_id = (SELECT * FROM common_cur)
+            UNION ALL
+            SELECT rate
+            FROM exchange_rates
+            WHERE base_currency_id = ? AND target_currency_id = (SELECT * FROM common_cur)
+            '''
+
+        rates = tuple(rec[0] for rec in db_cursor.execute(
+            sql, (base_id, target_id, base_id, target_id)).fetchall())
+
+        if res:
+            res = round(rates[0] / rates[1], 2)
+            return CurrencyRate(None, params['base_currency_code'], params['target_currency_code'], 1, res, None)
+
+        # bases_pares = set(res[0] for res in db_cursor.execute(
+        #     sql, (base_id,)).fetchall())
+        #
+        # targets_pares = set(res[0] for res in db_cursor.execute(
+        #     sql, (target_id,)).fetchall())
+        # common_cur = bases_pares & targets_pares
+
+    return None
 
 
 def update_exchange_rate(rate: CurrencyRate):
@@ -216,6 +256,10 @@ def update_exchange_rate(rate: CurrencyRate):
 
     substitute_keys(params, CURRENCY_RATE_FIELDS_TO_DB_MAP)
     substitute_keys(identity, CURRENCY_RATE_FIELDS_TO_DB_MAP)
+
+    rate_exists = get_exchange_rate(rate)
+    if not rate_exists:
+        raise NoRecordToModify(f'No rate that corresponds to {rate}')
 
     if len(identity) == 1:
         cte_param_line = build_sql_query_params_line(identity, '')
@@ -269,7 +313,13 @@ def add_exchange_rate(rate: CurrencyRate):
     VALUES (currencies_ids.b, currencies_ids.t, :rate, :source_id)
     RETURNING *'''
 
-    res = db_cursor.execute(sql, params).fetchone()
+    try:
+        res = db_cursor.execute(sql, params).fetchone()
+    except sqlite3.Error as e:
+        if e.sqlite_errorcode == 2067:
+            raise RecordOfSuchIdentityExists('Record with the same identity as {currency} already exists in database.')
+        else:
+            raise
 
     return CurrencyRate(*res[:3], 1, *res[3:])
 
@@ -277,7 +327,12 @@ def add_exchange_rate(rate: CurrencyRate):
 def count_exchange(fromcur: Currency, tocur: Currency, amount):
     base_cur = get_currency(fromcur)
     target_cur = get_currency(tocur)
-    rate = get_exchange_rate(CurrencyRate(None, base_cur.code, target_cur.code, None, None, None))
+
+    if not (base_cur and target_cur):
+        return None
+
+    rate = get_exchange_rate(CurrencyRate(None, base_cur.code, target_cur.code, None, None, None),
+                             strategy=FIND_RATE_BY_RECIPROCAL | FIND_RATE_BY_COMMON_TARGET)
 
     # base_cur_identity = fromcur.code or fromcur.id
     # target_cur_identity = tocur.code or tocur.id
@@ -291,4 +346,22 @@ def count_exchange(fromcur: Currency, tocur: Currency, amount):
 
     # rate = get_exchange_rate(CurrencyRate(None, base_cur_identity, target_cur_identity, None, None, None))
 
-    return base_cur, target_cur, rate, rate.rate * amount
+    if rate:
+        return base_cur, target_cur, rate, rate.rate * amount
+    return None
+
+
+class QueryError(Exception):
+    pass
+
+
+class NoRecordToModify(QueryError):
+    pass
+
+
+class RecordOfSuchIdentityExists(QueryError):
+    pass
+
+
+class BadIdentity(QueryError):
+    pass
