@@ -180,16 +180,16 @@ def get_exchange_rate(rate: CurrencyRate, *, strategy: int = 0):
     if res:
         return CurrencyRate(*res[:3], 1, res[3], res[-1])
 
-    elif not by_cur_codes and strategy != 0:
+    if not by_cur_codes and strategy != 0:
         raise AssertionError('Cant use any tricky fetching strategies when no both base and target codes were given')
 
-    elif FIND_RATE_BY_RECIPROCAL & strategy == FIND_RATE_BY_RECIPROCAL:
+    if FIND_RATE_BY_RECIPROCAL & strategy == FIND_RATE_BY_RECIPROCAL:
         res = get_exchange_rate(CurrencyRate(None, identity['target_currency_code'],
                                              identity['base_currency_code'], None, None, None))
         if res:
             return res.reciprocal_rate
 
-    elif FIND_RATE_BY_COMMON_TARGET & strategy == FIND_RATE_BY_COMMON_TARGET:
+    if FIND_RATE_BY_COMMON_TARGET & strategy == FIND_RATE_BY_COMMON_TARGET:
         ids = db_cursor.execute(
             '''
             SELECT currency_id
