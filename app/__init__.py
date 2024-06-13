@@ -1,4 +1,4 @@
-import json
+from configparser import ConfigParser
 import sqlite3
 from functools import wraps
 
@@ -8,9 +8,11 @@ from app.main import (get_all_currencies, get_all_exchange_rates, get_currency,
 
 from app.data_updates import CurrencyRatesUpdater
 
-db_specs = json.load(open('dbspecs.json'))
+configs = ConfigParser()
 
-connection = sqlite3.connect(db_specs['db_fname'])
+configs.read(open(r'configs\dbspecs.ini'))
+
+connection = sqlite3.connect(configs['DEFAULT']['db_fname'])
 
 set_connection(connection)
 
@@ -22,4 +24,14 @@ def wrapper_for_transaction(db_procedure):
             res = db_procedure(*args, **kwargs)
         return res
 
-    return
+    return transaction_wrapper
+
+
+update_currency = wrapper_for_transaction(update_currency)
+update_exchange_rate = wrapper_for_transaction(update_exchange_rate)
+add_currency = wrapper_for_transaction(add_currency)
+add_exchange_rate = wrapper_for_transaction(add_exchange_rate)
+
+
+
+def get_updater(fetcher_procedure: Callable = None): pass
