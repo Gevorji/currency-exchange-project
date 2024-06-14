@@ -11,11 +11,11 @@ from app.data_updates import CurrencyRatesUpdater
 
 configs = ConfigParser()
 
-configs.read(open(r'configs\dbspecs.ini'))
+# configs.read(open(r'configs\dbconfigs.ini'))
 
-connection = sqlite3.connect(configs['DEFAULT']['db_fname'])
+# connection = sqlite3.connect(configs['DEFAULT']['db_fname'])
 
-set_connection(connection)
+# set_connection(connection)
 
 
 def wrapper_for_transaction(db_procedure):
