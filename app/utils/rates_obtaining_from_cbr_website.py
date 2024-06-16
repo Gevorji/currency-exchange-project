@@ -5,13 +5,11 @@ from app.utils.rate_calculations import complete_building_set_of_rates
 from app.data_objects import CurrencyRate
 
 
-SOURCE_URL = 'http://www.cbr.ru/currency_base/daily/'
 COMMON_TARGET_CURRENCY_CODE = 'RUB'
-DAYS_VALID = 1
 RATE_PRECISION = 4
 
 
-def obtain_rates(url: str = SOURCE_URL, prepare_func=None):
+def obtain_rates(url: str, prepare_func=None):
 
     html = urlopen(url).read().decode('utf-8')
 

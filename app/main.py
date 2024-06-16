@@ -306,6 +306,7 @@ def add_exchange_rate(rate: CurrencyRate):
         JOIN currency b ON (b.currency_id = base_currency_id) 
         JOIN currency t ON (t.currency_id = target_currency_id)
         WHERE b.code = :base_currency_code AND t.code = :target_currency_code
+        )
         '''
 
     sql = cte + '''
