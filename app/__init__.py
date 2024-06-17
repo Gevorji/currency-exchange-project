@@ -1,3 +1,4 @@
+import os
 from configparser import ConfigParser
 import sqlite3
 from functools import wraps
@@ -9,20 +10,34 @@ from app.main import (get_all_currencies, get_all_exchange_rates, get_currency,
 
 from app.data_updates import CurrencyRatesUpdater
 
+pkg_dir = os.path.dirname(__file__)
+
 configs = ConfigParser()
 
-# configs.read(open(r'configs\dbconfigs.ini'))
+configs.read(open(os.path.join(pkg_dir, r'configs\dbconfigs.ini')))
 
-# connection = sqlite3.connect(configs['DEFAULT']['db_fname'])
+connection = sqlite3.connect(configs['DEFAULT']['db_fname'])
 
-# set_connection(connection)
+set_connection(connection)
+
+
+def connect_db(db_path):
+    global connection
+    connection = sqlite3.connect(db_path)
+    set_connection(connection)
 
 
 def wrapper_for_transaction(db_procedure):
     @wraps(db_procedure)
-    def transaction_wrapper(*args, **kwargs):
-        with connection:
-            res = db_procedure(*args, **kwargs)
+    def transaction_wrapper(*args, commit_if_success=True,**kwargs):
+        if commit_if_success:
+            with connection:
+                res = db_procedure(*args, **kwargs)
+        else:
+            try:
+                res = db_procedure(*args, **kwargs)
+            except sqlite3.Error:
+                connection.rollback()
         return res
 
     return transaction_wrapper

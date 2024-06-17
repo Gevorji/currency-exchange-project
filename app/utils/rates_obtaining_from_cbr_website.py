@@ -13,7 +13,7 @@ def obtain_rates(url: str, prepare_func=None):
 
     html = urlopen(url).read().decode('utf-8')
 
-    data = (prepare_for_insertion_into_db(rate) for rate in process_data_from_html_table(html)) \
+    data = (prepare_func(rate) for rate in process_data_from_html_table(html)) \
         if prepare_func else process_data_from_html_table(html)
 
     yield from data

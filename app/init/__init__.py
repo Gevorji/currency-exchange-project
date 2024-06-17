@@ -1,5 +1,6 @@
 import sqlite3
 import os.path
+from functools import partial
 
 from .currencies_json_processor import get_currencies_from_json
 import app.utils.rates_obtaining_from_cbr_website as cbr
@@ -15,7 +16,11 @@ def create_db(path):
     curs = connection.cursor()
     sql = open(os.path.join(pkg_dir, 'currency_db_creation.sql')).read()
 
-    curs.execute(sql)
+    try:
+        with connection:
+            curs.executescript(sql)
+    finally:
+        connection.close()
 
 
 def populate_currencies_from_json(db_path, json_path=currencies_in_json_path, processor=get_currencies_from_json):
@@ -31,30 +36,36 @@ def populate_currencies_from_json(db_path, json_path=currencies_in_json_path, pr
 
     currencies = processor(json_path)
 
-    cursor.executemany('INSERT INTO currency(code, full_name, currency_sign) VALUES (?, ?, ?)', currencies)
+    try:
+        with connection:
+            cursor.executemany('INSERT INTO currency(code, full_name, currency_sign) VALUES (?, ?, ?)', currencies)
+    finally:
+        connection.close()
 
 
-def populate_rates(db_path, rates_fetcher):
+def populate_rates(db_path, rates_fetcher=partial(cbr.obtain_rates, prepare_func=cbr.prepare_for_insertion_into_db)):
 
     connection = sqlite3.connect(db_path)
     cursor = connection.cursor()
 
-    rates = cbr.obtain_rates('https://cbr.ru/currency_base/daily/')
+    rates = rates_fetcher('https://cbr.ru/currency_base/daily/')
 
     sql = '''
         WITH currencies_ids AS (
-        SELECT b.currency_id as b, t.currency_id as t
-        FROM exchange_rates
-        JOIN currency b ON (b.currency_id = base_currency_id) 
-        JOIN currency t ON (t.currency_id = target_currency_id)
-        WHERE b.code = ? AND t.code = ?
+            SELECT currency.currency_id as b, t.currency_id as t
+            FROM currency
+            JOIN currency t ON currency.code = ? and t.code = ? 
         )
         INSERT INTO exchange_rates(base_currency_id, target_currency_id, rate) 
-        VALUES (currencies_ids.b, currencies_ids.t, ?)
+        SELECT currencies_ids.b, currencies_ids.t, ?
+        FROM currencies_ids
         '''
 
-    cursor.executemany(sql, rates)
-
+    try:
+        with connection:
+            cursor.executemany(sql, rates)
+    finally:
+        connection.close()
 
 
 

@@ -301,18 +301,17 @@ def add_exchange_rate(rate: CurrencyRate):
 
     cte = '''
         WITH currencies_ids AS (
-        SELECT b.currency_id as b, t.currency_id as t
-        FROM exchange_rates
-        JOIN currency b ON (b.currency_id = base_currency_id) 
-        JOIN currency t ON (t.currency_id = target_currency_id)
-        WHERE b.code = :base_currency_code AND t.code = :target_currency_code
+            SELECT currency.currency_id as b, t.currency_id as t
+            FROM currency
+            JOIN currency t ON currency.code = ? and t.code = ? 
         )
         '''
 
     sql = cte + '''
-    INSERT INTO exchange_rates(base_currency_id, target_currency_id, rate) 
-    VALUES (currencies_ids.b, currencies_ids.t, :rate, :source_id)
-    RETURNING *'''
+        INSERT INTO exchange_rates(base_currency_id, target_currency_id, rate) 
+        SELECT currencies_ids.b, currencies_ids.t, ?
+        FROM currencies_ids
+        RETURNING *'''
 
     try:
         res = db_cursor.execute(sql, params).fetchone()
