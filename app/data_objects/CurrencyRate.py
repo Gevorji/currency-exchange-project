@@ -20,18 +20,22 @@ class CurrencyRate(FieldValidizer):
     def __post_init__(self):
         self._validize_fields()
 
+        # assuming that rate is given for 1 unit if units field is None
+        if self.units is None and self.rate:
+            self.units = 1
+
     @property
     def reduced_rate(self):
 
-        return self.rate/self.units
+        return self.rate/self.units if self.rate and self.units else None
 
     @property
     def reciprocal_rate(self):
 
-        return 1/self.rate
+        return 1/self.rate if self.rate else None
 
     @property
     def r_reciprocal_rate(self):
 
-        return self.units/self.rate
+        return self.units/self.rate if self.rate and self.units else None
 
