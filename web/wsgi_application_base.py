@@ -37,11 +37,11 @@ class WSGIApplication:
 
             return result if result else tuple()
 
-    def _delegate_wsgi_call(self, env: dict, start_response: Callable):
-        path_components: list = env.get('PATH_INFO').split('/')
+        else:
+            return self._delegate_wsgi_call(env, start_response)
 
-        if not path_components[0] == '':
-            path_components.insert(0, '')
+    def _delegate_wsgi_call(self, env: dict, start_response: Callable):
+        path_components: list = self._get_path_components(env)
 
         new_env = env.copy()
         new_env['SCRIPT_NAME'] = '/' + path_components[1]
@@ -74,13 +74,23 @@ class WSGIApplication:
                 raise TypeError('Handler should be callable')
             if issubclass(self.__class__, handler):  # place an instance if decorated a class
                 handler = handler()
-            self._handler_route_map['path'] = handler
+            self._handler_route_map[path] = handler
             return handler
 
         return recorder
 
     def _is_valid_path(self, path: str):
         return True if self._path_pattern.fullmatch(path) else False
+
+    @staticmethod
+    def _get_path_components(env):
+        path_str = env.get('path')
+        path_comps = path_str.split('/')
+
+        if not path_comps[0] != '':
+            path_comps.insert(0, '')
+
+        return path_comps
 
     def call_with_exception_catch(self, func, env: dict, start_response: Callable):
         try:
@@ -89,3 +99,14 @@ class WSGIApplication:
             start_response(http_status_enum_to_string(HTTPStatus.INTERNAL_SERVER_ERROR), [], sys.exc_info())
         else:
             return response
+
+    def do_error_response(self, code: HTTPStatus, headers: Iterable, start_response, msg=None):
+
+        start_response(http_status_enum_to_string(code), headers)
+
+        if msg:
+            yield msg
+        else:
+            return
+
+
