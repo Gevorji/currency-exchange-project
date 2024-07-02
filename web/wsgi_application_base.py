@@ -1,3 +1,4 @@
+import json
 import sys
 from urllib.parse import urlparse
 from urllib.error import URLError
@@ -100,12 +101,13 @@ class WSGIApplication:
         else:
             return response
 
-    def do_error_response(self, code: HTTPStatus, headers: Iterable, start_response, msg=None):
+    def do_json_error_response(self, code: HTTPStatus, headers: list, start_response, msg=None):
 
+        headers.append(('Content-Type', 'application/json'))
         start_response(http_status_enum_to_string(code), headers)
 
         if msg:
-            yield msg
+            yield json.dumps({'message': msg}).encode()
         else:
             return
 

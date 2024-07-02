@@ -140,7 +140,7 @@ def add_currency(currency: Currency):
         if e.sqlite_errorcode == 2067:
             raise RecordOfSuchIdentityExists(f'Record with the same identity as {currency} already exists in database.')
         elif e.sqlite_errorcode == 1299:
-            raise RequiredFieldAbsent(f'Code and full name must be given')
+            raise RequiredFieldAbsent(f'Code, full name and sign of new currency must be given')
         else:
             raise
 

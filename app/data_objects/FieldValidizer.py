@@ -6,4 +6,4 @@ class FieldValidizer:
         invalid_fields = tuple(k for k, v in validness.items() if v is False)
 
         if invalid_fields:
-            raise TypeError(f"Invaild field values: {', '.join(str(i) for i in invalid_fields)}")
+            raise ValueError(f"Invaild field values: {', '.join(str(i) for i in invalid_fields)}")

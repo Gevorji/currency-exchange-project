@@ -10,7 +10,6 @@ from .wsgi_application_base import WSGIApplication, http_status_enum_to_string
 import app as coresrv
 from app.data_objects import Currency, CurrencyRate
 
-
 application = WSGIApplication()
 
 
@@ -26,7 +25,8 @@ def json_dumpb(obj, *args, encoding='utf-8', **kwargs):
 
 
 currency_as_dict = partial(dataclass_as_specified_dict, fields=('id', 'full_name', 'code', 'sign'))
-exch_rate_as_dict = partial(dataclass_as_specified_dict, fields=('id', 'base_currency_id', 'target_currency_id', 'rate'))
+exch_rate_as_dict = partial(dataclass_as_specified_dict,
+                            fields=('id', 'base_currency_id', 'target_currency_id', 'rate'))
 
 
 @application.at_route('/currencies')
@@ -46,14 +46,54 @@ class CurrenciesHandler(WSGIApplication):
 
     def doPOST(self, env, start_response):
         if env.get('HTTP_CONTENT_TYPE') != 'application/x-www-form-urlencoded':
-            headers = []
-            json_data = json_dumpb(
-                {'message': 'Required x-www-form-urlencoded'}
+            yield from self.do_json_error_response(
+                HTTPStatus.UNSUPPORTED_MEDIA_TYPE, [], start_response,
+                'Required x-www-form-urlencoded'
             )
-            headers.append(('Content-Type', 'application/json'))
-            self.do_error_response(HTTPStatus.UNSUPPORTED_MEDIA_TYPE, headers, json_data)
+            return
 
-        ql = parse_qsl(env['wsgi.input'].read())
+        try:
+            qd = dict(parse_qsl(env['wsgi.input'].read().decode(), strict_parsing=True))
+
+            if not {'name', 'code', 'sign'} - set(qd.keys()) == set():
+                raise AssertionError()
+        except (ValueError, AssertionError):
+            yield from self.do_json_error_response(
+                HTTPStatus.BAD_REQUEST, [], start_response, 'Bad x-www-form-urlencoded'
+            )
+            return
+
+        try:
+            new_curr = Currency(None, qd['code'], qd['name'], qd['sign'])
+        except ValueError as e:
+            yield from self.do_json_error_response(
+                HTTPStatus.BAD_REQUEST, [], start_response, e.args[0]
+            )
+            return
+
+        try:
+            added_curr = coresrv.add_currency(new_curr)
+        except coresrv.main.RequiredFieldAbsent as e:
+            yield from self.do_json_error_response(
+                HTTPStatus.BAD_REQUEST, [], start_response, e.args[0]
+            )
+            return
+        except coresrv.main.RecordOfSuchIdentityExists as e:
+            yield from self.do_json_error_response(
+                HTTPStatus.CONFLICT, [], start_response, e.args[0]
+            )
+            return
+        except Exception as e:
+            yield from self.do_json_error_response(
+                HTTPStatus.INTERNAL_SERVER_ERROR, [], start_response, e.args[0]
+            )
+            return
+
+        start_response(
+            http_status_enum_to_string(HTTPStatus.CREATED), (('Content-Type', 'application/json'),)
+        )
+
+        yield json_dumpb(currency_as_dict(added_curr))
 
 
 class CurrencyHandler(WSGIApplication):
@@ -69,19 +109,19 @@ class CurrencyHandler(WSGIApplication):
             )
             headers.append(('Content-Type', 'text/json'))
 
-            yield from self.do_error_response(HTTPStatus.BAD_REQUEST, headers, start_response, json_msg)
+            yield from self.do_json_error_response(HTTPStatus.BAD_REQUEST, headers, start_response, json_msg)
             return
 
         try:
             curr_query_obj = Currency(None, curr_code, None, None)
-        except TypeError:
+        except ValueError:
             headers = []
             json_msg = json_dumpb(
                 {'message': 'Invalid currency code (valid is 3 alphabetical characters)'}
             )
             headers.append(('Content-Type', 'text/json'))
 
-            yield from self.do_error_response(
+            yield from self.do_json_error_response(
                 HTTPStatus.BAD_REQUEST, (('Content-Type', 'text/json'),), start_response, json_msg
             )
             return
@@ -95,7 +135,7 @@ class CurrencyHandler(WSGIApplication):
             )
             headers.append(('Content-Type', 'text/json'))
 
-            yield from self.do_error_response(HTTPStatus.NOT_FOUND, headers, start_response, json_msg)
+            yield from self.do_json_error_response(HTTPStatus.NOT_FOUND, headers, start_response, json_msg)
             return
 
         json_data = json_dumpb(currency_as_dict(curr_data_obj))
@@ -104,6 +144,3 @@ class CurrencyHandler(WSGIApplication):
         start_response(HTTPStatus.OK, headers)
 
         yield json_data
-
-
-

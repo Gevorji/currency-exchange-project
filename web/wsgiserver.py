@@ -110,7 +110,7 @@ class WSGIServerRequestHandler(BaseHTTPRequestHandler):
 
 
 if __name__ == '__main__':
-    server = HTTPServer(('localhost', 8080), WSGIServerRequestHandler)
+    server = HTTPServer(('localhost', 80), WSGIServerRequestHandler)
     print(f'serving at: {server.socket.getsockname()}')
     server.serve_forever()
 
