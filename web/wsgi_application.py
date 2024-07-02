@@ -6,6 +6,7 @@ from collections import OrderedDict
 from http import HTTPStatus
 from urllib.parse import parse_qsl
 
+import app.main
 from .wsgi_application_base import WSGIApplication, http_status_enum_to_string
 import app as coresrv
 from app.data_objects import Currency, CurrencyRate
@@ -140,7 +141,24 @@ class CurrencyHandler(WSGIApplication):
 
         json_data = json_dumpb(currency_as_dict(curr_data_obj))
 
-        headers = [('Content-Type', 'textson')]
+        headers = [('Content-Type', 'application/json')]
         start_response(HTTPStatus.OK, headers)
 
         yield json_data
+
+
+    @application.at_route('/exchangeRates')
+    class ExchangeRatesHandler(WSGIApplication):
+
+        def doGET(self, env, start_response):
+            try:
+                rates = coresrv.get_all_exchange_rates()
+            except app.main.sqlite3.Error as e:
+                    yield from self.do_json_error_response(
+                        HTTPStatus.INTERNAL_SERVER_ERROR, [], start_response, e.args[0]
+                    )
+                    return
+
+
+
+

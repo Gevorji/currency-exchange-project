@@ -64,7 +64,7 @@ class WSGIApplication:
 
         return self._handler_route_map.get(path)
 
-    def at_route(self, path):
+    def at_route(self, path, case_sensitive=False):
         if not self._is_valid_path(path):
             raise URLError(f'{path} is invalid path')
         if path == '':
@@ -76,6 +76,9 @@ class WSGIApplication:
             if issubclass(self.__class__, handler):  # place an instance if decorated a class
                 handler = handler()
             self._handler_route_map[path] = handler
+            if not case_sensitive:
+                self._handler_route_map[path.lower()] = handler
+                self._handler_route_map[path.upper()] = handler
             return handler
 
         return recorder
