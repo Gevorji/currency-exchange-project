@@ -46,7 +46,7 @@ class WSGIApplication:
 
         new_env = env.copy()
         new_env['SCRIPT_NAME'] = '/' + path_components[1]
-        new_env['PATH_INFO'] = '/'.join(path_components[2:])
+        new_env['PATH_INFO'] = '/' + '/'.join(path_components[2:])
 
         handler = self._get_handler(new_env['SCRIPT_NAME'])
 
@@ -88,7 +88,7 @@ class WSGIApplication:
 
     @staticmethod
     def _get_path_components(env):
-        path_str = env.get('path')
+        path_str = env.get('PATH_INFO')
         path_comps = path_str.split('/')
 
         if not path_comps[0] != '':
