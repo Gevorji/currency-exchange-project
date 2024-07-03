@@ -79,6 +79,11 @@ class CurrenciesHandler(WSGIApplication):
                 HTTPStatus.BAD_REQUEST, [], start_response, 'Bad x-www-form-urlencoded'
             )
             return
+        except UnicodeDecodeError:
+            yield from self.do_json_error_response(
+                HTTPStatus.UNPROCESSABLE_ENTITY, [], start_response, 'Was not able to decode body'
+            )
+            return
 
         try:
             new_curr = Currency(None, qd['code'], qd['name'], qd['sign'])
@@ -194,7 +199,59 @@ class ExchangeRatesHandler(WSGIApplication):
 
         yield json_data
 
+    def doPOST(self, env, start_response):
+        if env.get('HTTP_CONTENT_TYPE') != 'application/x-www-form-urlencoded':
+            yield from self.do_json_error_response(
+                HTTPStatus.UNSUPPORTED_MEDIA_TYPE, [], start_response,
+                'Required x-www-form-urlencoded'
+            )
+            return
 
+        try:
+            qd = dict(parse_qsl(env['wsgi.input'].read().decode(), strict_parsing=True))
+
+            if not {'baseCurrencyCode', 'targetCurrencyCode', 'rate'} - set(qd.keys()) == set():
+                raise AssertionError()
+        except (ValueError, AssertionError):
+            yield from self.do_json_error_response(
+                HTTPStatus.BAD_REQUEST, [], start_response, 'Bad x-www-form-urlencoded'
+            )
+            return
+        except UnicodeDecodeError:
+            yield from self.do_json_error_response(
+                HTTPStatus.UNPROCESSABLE_ENTITY, [], start_response, 'Was not able to decode body'
+            )
+            return
+
+        try:
+            new_er = coresrv.add_exchange_rate(
+                CurrencyRate(None, qd['baseCurrencyCode'], qd['targetCurrencyCode'], 1, qd['rate'], None)
+            )
+        except ValueError as e:
+            yield from self.do_json_error_response(
+                HTTPStatus.BAD_REQUEST, [], start_response, f'Bad currency code: {e.args[0]}'
+            )
+            return
+        except app.main.RecordOfSuchIdentityExists as e:
+            yield from self.do_json_error_response(
+                HTTPStatus.CONFLICT, [], start_response, e.args[0]
+            )
+            return
+        except app.main.QueryError:
+            msg = 'One or more currencies is not present at applications database'
+            yield from self.do_json_error_response(
+                HTTPStatus.NOT_FOUND, [], start_response, msg
+            )
+            return
+
+        start_response(
+            http_status_enum_to_string(HTTPStatus.CREATED), (('Content-Type', 'application/json'),)
+        )
+
+        yield json_dumpb(exch_rate_as_dict(new_er))
+
+
+@application.at_route('/exchangeRate')
 class ExchangeRateHandler(WSGIApplication):
 
     def doGET(self, env, start_response):
@@ -226,8 +283,15 @@ class ExchangeRateHandler(WSGIApplication):
                 HTTPStatus.OK, (('Content-Type', 'application/json'),)
             )
 
+            bcurr = currency_as_dict(coresrv.get_currency(Currency(None, rate.base_currency_code, None, None)))
+            tcurr = currency_as_dict(coresrv.get_currency(Currency(None, rate.target_currency_code, None, None)))
 
+            drate = exch_rate_as_dict(rate)
+            drate['baseCurrency'] = bcurr
+            drate['targetCurrency'] = tcurr
 
+            json_data = json_dumpb(drate)
+            yield json_data
 
 
 
