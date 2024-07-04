@@ -323,10 +323,24 @@ class ExchangeHandler(WSGIApplication):
             )
             return
 
-        bcurr = Currency(None, rate.base_currency_code, None, None)
-        tcurr = Currency(None, rate.target_currency_code, None, None)
+        bcurr = coresrv.get_currency(Currency(None, rate.base_currency_code, None, None))
+        tcurr = coresrv.get_currency(Currency(None, rate.target_currency_code, None, None))
 
-        conv_amount = coresrv.count_exchange(bcurr, tcurr, qd['amount'])
+        conv_amount = rate * qd['amount']
+
+        response = {
+            'baseCurrency': currency_as_dict(bcurr),
+            'targetCurrency': currency_as_dict(tcurr),
+            'rate': round(rate.rate, 2),
+            'amount': round(qd['amount', 2]),
+            'convertedAmount': round(conv_amount, 2)
+        }
+
+        start_response(
+            HTTPStatus.OK, (('Content-Type', 'application/json'),)
+        )
+
+        yield json_dumpb(response)
 
 
 
