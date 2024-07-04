@@ -359,33 +359,6 @@ def add_exchange_rate(rate: CurrencyRate):
         return None
 
 
-def count_exchange(fromcur: Currency, tocur: Currency, amount):
-    base_cur = get_currency(fromcur)
-    target_cur = get_currency(tocur)
-
-    if not (base_cur and target_cur):
-        return None
-
-    rate = get_exchange_rate(CurrencyRate(None, base_cur.code, target_cur.code, None, None, None),
-                             strategy=FIND_RATE_BY_RECIPROCAL | FIND_RATE_BY_COMMON_TARGET)
-
-    # base_cur_identity = fromcur.code or fromcur.id
-    # target_cur_identity = tocur.code or tocur.id
-
-    # assert base_cur_identity and target_cur_identity, 'No identity in one or more given objects'
-    #
-    # if base_cur_identity == fromcur.id:
-    #     base_cur_identity = db_cursor.execute('SELECT code FROM currency WHERE currency_id = ?', (fromcur.id,))
-    # if target_cur_identity == tocur.id:
-    #     target_cur_identity = db_cursor.execute('SELECT code FROM currency WHERE currency_id = ?', (tocur.id,))
-
-    # rate = get_exchange_rate(CurrencyRate(None, base_cur_identity, target_cur_identity, None, None, None))
-
-    if rate:
-        return base_cur, target_cur, rate, rate.rate * amount
-    return None
-
-
 class QueryError(Exception):
     pass
 
