@@ -4,10 +4,11 @@ import json
 from functools import partial
 from collections import OrderedDict
 from http import HTTPStatus
+from typing import Callable
 from urllib.parse import parse_qsl
 
 import app.main
-from .wsgi_application_base import WSGIApplication, http_status_enum_to_string
+from .wsgi_application_base import WSGIApplication, http_status_enum_to_string, ResponseProcessingError
 import app as coresrv
 from app.data_objects import Currency, CurrencyRate
 from app.main import substitute_keys
@@ -22,6 +23,7 @@ EXCHANGE_RATE_FIELDS_MAPPING = {
 CURRENCY_FIELDS_MAPPING = {
     'full_name': 'name'
 }
+
 
 def dataclass_as_specified_dict(dataclass: dataclasses.dataclass, fields: tuple):
     d = OrderedDict()
@@ -62,29 +64,11 @@ class CurrenciesHandler(WSGIApplication):
         yield json_data
 
     def doPOST(self, env, start_response):
-        if env.get('HTTP_CONTENT_TYPE') != 'application/x-www-form-urlencoded':
-            yield from self.do_json_error_response(
-                HTTPStatus.UNSUPPORTED_MEDIA_TYPE, [], start_response,
-                'Required x-www-form-urlencoded'
-            )
-            return
-
         try:
-            qd = dict(parse_qsl(env['wsgi.input'].read().decode(), strict_parsing=True))
-
-            if not {'name', 'code', 'sign'} - set(qd.keys()) == set():
-                raise AssertionError()
-        except (ValueError, AssertionError):
-            yield from self.do_json_error_response(
-                HTTPStatus.BAD_REQUEST, [], start_response, 'Bad x-www-form-urlencoded'
-            )
+            qd = self._parse_qsl(env, ('code', 'name', 'sign'))
+        except ResponseProcessingError as e:
+            yield from self.do_json_error_response(e.args[0], [], start_response, e.args[1])
             return
-        except UnicodeDecodeError:
-            yield from self.do_json_error_response(
-                HTTPStatus.UNPROCESSABLE_ENTITY, [], start_response, 'Was not able to decode body'
-            )
-            return
-
         try:
             new_curr = Currency(None, qd['code'], qd['name'], qd['sign'])
         except ValueError as e:
@@ -200,27 +184,10 @@ class ExchangeRatesHandler(WSGIApplication):
         yield json_data
 
     def doPOST(self, env, start_response):
-        if env.get('HTTP_CONTENT_TYPE') != 'application/x-www-form-urlencoded':
-            yield from self.do_json_error_response(
-                HTTPStatus.UNSUPPORTED_MEDIA_TYPE, [], start_response,
-                'Required x-www-form-urlencoded'
-            )
-            return
-
         try:
-            qd = dict(parse_qsl(env['wsgi.input'].read().decode(), strict_parsing=True))
-
-            if not {'baseCurrencyCode', 'targetCurrencyCode', 'rate'} - set(qd.keys()) == set():
-                raise AssertionError()
-        except (ValueError, AssertionError):
-            yield from self.do_json_error_response(
-                HTTPStatus.BAD_REQUEST, [], start_response, 'Bad x-www-form-urlencoded'
-            )
-            return
-        except UnicodeDecodeError:
-            yield from self.do_json_error_response(
-                HTTPStatus.UNPROCESSABLE_ENTITY, [], start_response, 'Was not able to decode body'
-            )
+            qd = self._parse_qsl(env, ('baseCurrencyCode', 'targetCurrencyCode', 'rate'))
+        except ResponseProcessingError as e:
+            yield from self.do_json_error_response(e.args[0], [], start_response, e.args[1])
             return
 
         try:
@@ -255,23 +222,10 @@ class ExchangeRatesHandler(WSGIApplication):
 class ExchangeRateHandler(WSGIApplication):
 
     def doGET(self, env, start_response):
-        path_comps = self._get_path_components(env)
-
-        if len(path_comps) != 2 or len(path_comps[1]) != 6:
-            msg = 'Exactly 1 currency pair in for XXXXXX should be provided as an endpoint for this resource'
-            yield from self.do_json_error_response(
-                HTTPStatus.BAD_REQUEST, [], start_response, msg
-            )
-            return
-
-        bcode, tcode = path_comps[1][:3].upper(), path_comps[1][3:].upper()
-
         try:
-            query_rate = CurrencyRate(None, bcode, tcode, None, None, None)
-        except ValueError as e:
-            yield from self.do_json_error_response(
-                HTTPStatus.BAD_REQUEST, [], start_response, e.args[0]
-            )
+            query_rate = self._get_query_rate_from_url(env)
+        except ResponseProcessingError as e:
+            yield from self.do_json_error_response(e.args[0], [], start_response, e.args[1])
             return
 
         rate = coresrv.get_exchange_rate(
@@ -293,6 +247,86 @@ class ExchangeRateHandler(WSGIApplication):
             json_data = json_dumpb(drate)
             yield json_data
 
+    def doPATCH(self, env, start_response):
+        try:
+            query_er = self._get_query_rate_from_url(env)
+        except ResponseProcessingError as e:
+            yield from self.do_json_error_response(e.args[0], [], start_response, e.args[1])
+            return
+
+        try:
+            qd = self._parse_qsl(env, ('rate',))
+        except ResponseProcessingError as e:
+            yield from self.do_json_error_response(e.args[0], [], start_response, e.args[1])
+            return
+
+        query_er.rate = qd['rate']
+
+        try:
+            updated_er = coresrv.update_exchange_rate(query_er)
+        except app.main.NoRecordToModify:
+            msg = f'No record of {query_er.base_currency_code}-{query_er.target_currency_code} in database'
+            yield from self.do_json_error_response(
+                HTTPStatus.NOT_FOUND, [], start_response, msg
+            )
+            return
+
+        start_response(
+            HTTPStatus.OK, (('Content-Type', 'application/json'),)
+        )
+
+        yield json_dumpb(exch_rate_as_dict(updated_er))
+
+    def _get_query_rate_from_url(self, env):
+        path_comps = self._get_path_components(env)
+
+        if len(path_comps) != 2 or len(path_comps[1]) != 6:
+            msg = 'Exactly 1 currency pair in for XXXXXX should be provided as an endpoint for this resource'
+            raise ResponseProcessingError(HTTPStatus.BAD_REQUEST, msg)
+
+        bcode, tcode = path_comps[1][:3].upper(), path_comps[1][3:].upper()
+
+        try:
+            query_rate = CurrencyRate(None, bcode, tcode, None, None, None)
+        except ValueError as e:
+            raise ResponseProcessingError(HTTPStatus.BAD_REQUEST, e.args[0])
+
+        return query_rate
+
+
+class ExchangeHandler(WSGIApplication):
+
+    def doGET(self, env, start_response):
+        try:
+            qd = self._parse_qsl({'wsgi.input': env['QUERY_STRING'].encode()}, ('from', 'to', 'amount'))
+        except ResponseProcessingError as e:
+            yield from self.do_json_error_response(
+                HTTPStatus.BAD_REQUEST, [], start_response, 'Malformed query'
+            )
+            return
+
+        try:
+            rate = coresrv.get_exchange_rate(
+                CurrencyRate(None, qd['from'], qd['to'], None, None, None),
+                strategy=app.main.FIND_RATE_BY_RECIPROCAL | app.main.FIND_RATE_BY_COMMON_TARGET
+            )
+        except ValueError as e:
+            self.do_json_error_response(
+                HTTPStatus.BAD_REQUEST,
+                [], start_response,
+                f'Invalid currency codes: {e.args[1]}')
+            return
+
+        if not rate:
+            self.do_json_error_response(
+                HTTPStatus.NOT_FOUND, [], start_response, 'No such exchange_rate'
+            )
+            return
+
+        bcurr = Currency(None, rate.base_currency_code, None, None)
+        tcurr = Currency(None, rate.target_currency_code, None, None)
+
+        conv_amount = coresrv.count_exchange(bcurr, tcurr, qd['amount'])
 
 
 
