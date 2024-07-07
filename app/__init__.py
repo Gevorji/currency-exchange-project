@@ -4,15 +4,16 @@ import sqlite3
 from functools import wraps
 from typing import Callable
 
+from app import main
 from app.main import (get_all_currencies, get_all_exchange_rates, get_currency,
                       get_exchange_rate, update_currency, update_exchange_rate,
-                      add_currency, add_exchange_rate, count_exchange)
+                      add_currency, add_exchange_rate)
 
 from app.data_updates import CurrencyRatesUpdater
 
 pkg_dir = os.path.dirname(__file__)
 
-connection=None
+connection = None
 
 configs = ConfigParser()
 
@@ -26,7 +27,7 @@ def connect_db(db_path):
     main.db_cursor.execute('PRAGMA foreign_keys(1)')
 
 
-connect_db(configs['DEFAULT']['db_fname'])
+connect_db(os.path.join(pkg_dir, configs['DEFAULT']['db_fname']))
 
 
 def wrapper_for_transaction(db_procedure):

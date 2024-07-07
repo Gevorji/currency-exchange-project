@@ -8,12 +8,11 @@ from typing import Callable
 from urllib.parse import parse_qsl
 
 import app.main
-from .wsgi_application_base import WSGIApplication, http_status_enum_to_string, ResponseProcessingError
+from web.wsgi_application_base import WSGIApplication, http_status_enum_to_string, ResponseProcessingError
 import app as coresrv
 from app.data_objects import Currency, CurrencyRate
 from app.main import substitute_keys
-
-application = WSGIApplication()
+from web.updaters import get_er_updaters
 
 EXCHANGE_RATE_FIELDS_MAPPING = {
     'base_currency_id': 'baseCurrency',
@@ -23,6 +22,8 @@ EXCHANGE_RATE_FIELDS_MAPPING = {
 CURRENCY_FIELDS_MAPPING = {
     'full_name': 'name'
 }
+
+ER_UPDATERS = get_er_updaters()
 
 
 def dataclass_as_specified_dict(dataclass: dataclasses.dataclass, fields: tuple):
@@ -46,6 +47,28 @@ def exch_rate_as_dict(er: CurrencyRate):
     d = dataclass_as_specified_dict(er, ('id', 'base_currency_id', 'target_currency_id', 'rate'))
     substitute_keys(d, EXCHANGE_RATE_FIELDS_MAPPING)
     return d
+
+
+class CurrencyExchangeRatesWSGIApp(WSGIApplication):
+    def __call__(self, env, start_response):
+        if env['REQUEST_METHOD'] == 'GET' and self._get_path_components(env)[1].casefold() == 'exchangeRates'.casefold():
+            self.refresh_data()
+
+        return super().__call__(env, start_response)
+
+    @staticmethod
+    def refresh_data():
+        for updr in ER_UPDATERS:
+            try:
+                do_update = updr.update_is_needed()
+            except TypeError:
+                updr.update(app.main.NoRecordToModify)
+                continue
+            if do_update:
+                updr.update(app.main.NoRecordToModify)
+
+
+application = CurrencyExchangeRatesWSGIApp()
 
 
 @application.at_route('/currencies')

@@ -1,3 +1,4 @@
+import datetime
 import sqlite3
 import os.path
 from functools import partial
@@ -44,11 +45,12 @@ def populate_currencies_from_json(db_path, json_path=currencies_in_json_path, pr
 
 
 def populate_rates(db_path, rates_fetcher=partial(cbr.obtain_rates, prepare_func=cbr.prepare_for_insertion_into_db)):
-
     connection = sqlite3.connect(db_path)
     cursor = connection.cursor()
+    source_path = 'https://cbr.ru/currency_base/daily/'
+    injection_date = datetime.date.today().isoformat()
 
-    rates = rates_fetcher('https://cbr.ru/currency_base/daily/')
+    rates = rates_fetcher(source_path)
 
     sql = '''
         WITH currencies_ids AS (
@@ -64,12 +66,9 @@ def populate_rates(db_path, rates_fetcher=partial(cbr.obtain_rates, prepare_func
     try:
         with connection:
             cursor.executemany(sql, rates)
+            cursor.execute(
+                'UPDATE rates_info_source SET last_appeal = ? WHERE src_path = ?',
+                (injection_date, source_path)
+            )
     finally:
         connection.close()
-
-
-
-
-
-
-

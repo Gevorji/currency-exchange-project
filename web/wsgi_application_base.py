@@ -1,6 +1,6 @@
 import json
 import sys
-from urllib.parse import urlparse
+from urllib.parse import urlparse, parse_qsl
 from urllib.error import URLError
 from typing import Callable, Iterable
 from http import HTTPStatus
@@ -114,4 +114,30 @@ class WSGIApplication:
         else:
             return
 
+    def _parse_qsl(self, env: dict, required_fields: list | tuple = None) -> dict:
+        if env.get('HTTP_CONTENT_TYPE') != 'application/x-www-form-urlencoded':
+            raise ResponseProcessingError(HTTPStatus.UNSUPPORTED_MEDIA_TYPE, 'Required x-www-form-urlencoded')
+
+        try:
+            qd = dict(parse_qsl(env['wsgi.input'].read().decode(), strict_parsing=True))
+
+            if required_fields:
+                if not set(required_fields) - set(qd.keys()) == set():
+                    raise AssertionError()
+
+        except ValueError:
+            raise ResponseProcessingError(HTTPStatus.BAD_REQUEST, 'Bad x-www-form-urlencoded')
+        except AssertionError:
+            raise ResponseProcessingError(HTTPStatus.BAD_REQUEST, 'Not enough or too many parameters')
+        except UnicodeDecodeError:
+            raise ResponseProcessingError(HTTPStatus.UNPROCESSABLE_ENTITY, 'Was not able to decode body')
+
+        return qd
+
+
+
+class ResponseProcessingError(Exception):
+    """Raised by internal procedures for generalized error response constructing"""
+    def __init__(self, status: HTTPStatus, msg: str):
+        self.args = status, msg
 
