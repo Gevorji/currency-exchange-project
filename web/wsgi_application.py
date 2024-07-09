@@ -1,11 +1,12 @@
 import dataclasses
-import http.client
 import json
-from functools import partial
+import sys
 from collections import OrderedDict
 from http import HTTPStatus
 from typing import Callable
-from urllib.parse import parse_qsl
+import logging
+import logging.config
+import web.apploggers as apploggers
 
 import app.main
 from web.wsgi_application_base import WSGIApplication, http_status_enum_to_string, ResponseProcessingError
@@ -49,7 +50,12 @@ def exch_rate_as_dict(er: CurrencyRate):
     return d
 
 
+logging.config.dictConfig(apploggers.logconfig)
+
+
 class CurrencyExchangeRatesWSGIApp(WSGIApplication):
+    _logger = logging.getLogger('currencyExchangeApp')
+
     def __call__(self, env, start_response):
         if env['REQUEST_METHOD'] == 'GET' and self._get_path_components(env)[1].casefold() == 'exchangeRates'.casefold():
             self.refresh_data()
@@ -151,7 +157,7 @@ class CurrencyHandler(WSGIApplication):
             headers.append(('Content-Type', 'text/json'))
 
             yield from self.do_json_error_response(
-                HTTPStatus.BAD_REQUEST, [('Content-Type', 'text/json'),], start_response, json_msg
+                HTTPStatus.BAD_REQUEST, [('Content-Type', 'text/json'), ], start_response, json_msg
             )
             return
 
@@ -182,10 +188,10 @@ class ExchangeRatesHandler(WSGIApplication):
         try:
             rates = coresrv.get_all_exchange_rates()
         except app.main.sqlite3.Error as e:
-                yield from self.do_json_error_response(
-                    HTTPStatus.INTERNAL_SERVER_ERROR, [], start_response, e.args[0]
-                )
-                return
+            yield from self.do_json_error_response(
+                HTTPStatus.INTERNAL_SERVER_ERROR, [], start_response, e.args[0]
+            )
+            return
 
         er_list = []
         for rate in rates:
@@ -365,6 +371,3 @@ class ExchangeHandler(WSGIApplication):
         )
 
         yield json_dumpb(response)
-
-
-
