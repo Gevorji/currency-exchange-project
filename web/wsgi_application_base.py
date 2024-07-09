@@ -39,20 +39,22 @@ class WSGIApplication:
             return result if result else tuple()
 
         else:
-            return self._delegate_wsgi_call(env, start_response)
+            path_components: list = self._get_path_components(env)
+            print(env)
+            new_env = env.copy()
+            new_env['SCRIPT_NAME'] = '/' + path_components[1]
+            new_env['PATH_INFO'] = '/' + '/'.join(path_components[2:])
+
+            return self._delegate_wsgi_call(new_env, start_response)
 
     def _delegate_wsgi_call(self, env: dict, start_response: Callable):
-        path_components: list = self._get_path_components(env)
 
-        new_env = env.copy()
-        new_env['SCRIPT_NAME'] = '/' + path_components[1]
-        new_env['PATH_INFO'] = '/' + '/'.join(path_components[2:])
-
-        handler = self._get_handler(new_env['SCRIPT_NAME'])
+        handler = self._get_handler(env['SCRIPT_NAME'])
 
         if not handler:
-            start_response(http_status_enum_to_string(HTTPStatus.NOT_FOUND), tuple())
-            return tuple()
+            start_response(http_status_enum_to_string(HTTPStatus.NOT_FOUND), [('Content-Type', 'text/plain')])
+            supplied = ', '.join(self._handler_route_map.keys())
+            return (f'Cant serve request to {env["SCRIPT_NAME"]}. Supplied paths on this app: {supplied}'.encode(),)
 
         result = self.call_with_exception_catch(handler, env, start_response)
 
@@ -91,7 +93,7 @@ class WSGIApplication:
         path_str = env.get('PATH_INFO')
         path_comps = path_str.split('/')
 
-        if not path_comps[0] != '':
+        if path_comps[0] != '':
             path_comps.insert(0, '')
 
         return path_comps

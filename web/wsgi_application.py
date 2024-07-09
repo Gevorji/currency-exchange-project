@@ -151,7 +151,7 @@ class CurrencyHandler(WSGIApplication):
             headers.append(('Content-Type', 'text/json'))
 
             yield from self.do_json_error_response(
-                HTTPStatus.BAD_REQUEST, (('Content-Type', 'text/json'),), start_response, json_msg
+                HTTPStatus.BAD_REQUEST, [('Content-Type', 'text/json'),], start_response, json_msg
             )
             return
 
@@ -317,6 +317,7 @@ class ExchangeRateHandler(WSGIApplication):
         return query_rate
 
 
+@application.at_route('/exchange')
 class ExchangeHandler(WSGIApplication):
 
     def doGET(self, env, start_response):
