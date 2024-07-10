@@ -1,47 +1,40 @@
 import unittest
 import os
 import sys
-import subprocess
-import urllib.error
-from urllib.request import urlopen, Request
-from urllib.parse import urlunparse, ParseResult
-from http import HTTPStatus
 import json
+import wsgiref
+import wsgiref.util
 
 import app as coreapp
+from web.tests.mock_wsgi_gateway import MockServerGateway
+from web.wsgi_application import application, currency_as_dict, exch_rate_as_dict
 
-sinf = subprocess.STARTUPINFO(dwFlags=subprocess.CREATE_NEW_CONSOLE)
-pr = subprocess.Popen(['python', 'test_server.py'], startupinfo=sinf)
+mock_env = {}
 
-server_adr = 'localhost:8000'
-scheme = 'http'
+wsgiref.util.setup_testing_defaults(mock_env)
 
-urlbase = ('http', 'localhost:8000', '', )
-
-
-def build_url(path='', query=''):
-    return urlunparse(ParseResult('http', 'localhost:8000', path, '', query, ''))
-
-
-def do_request(req: Request):
-    try:
-        res = urlopen(req)
-    except urllib.error.HTTPError as e:
-        sys.stderr.write(f'{e.code}')
-        sys.stderr.write(f'{e.read()}')
-        return e
+application.set_logging_level('DEBUG')
 
 
 class GetAllCurrencies(unittest.TestCase):
+    gw = MockServerGateway(mock_env)
+
+    def setUp(self) -> None:
+        self.gw.env = mock_env.copy()
+
+    def tearDown(self) -> None:
+        self.gw.clean_attrs()
 
     def test_GetCurrencies(self):
-        req = Request(build_url('/currencies'))
-        res = do_request(req)
+        env = mock_env.copy()
+        env['SCRIPT_NAME'] = ''
+        env['PATH_INFO'] = '/currencies'
+        gw = MockServerGateway(env)
 
-        code, headers, body = res.code, res.headers, res.read().decode()
+        gw.run(application)
 
-        correct = list(coreapp.get_all_currencies())
+        correct = json.dumps(list(currency_as_dict(cur) for cur in coreapp.get_all_currencies()))
 
-        self.assertEqual(json.loads(body), correct)
+        self.assertEqual(gw.result_data[0], correct)
 
 

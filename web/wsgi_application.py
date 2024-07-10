@@ -57,30 +57,48 @@ class CurrencyExchangeRatesWSGIApp(WSGIApplication):
     _logger = logging.getLogger('currencyExchangeApp')
 
     def __call__(self, env, start_response):
+        self._logger.debug(
+            '=Request arrived at {}=\nEnvironment:{}'
+            .format(env['SCRIPT_NAME'], '\n\t'.join(str(itm) for itm in env.items()))
+        )
+        self._logger.info(f'Starting response (current handler: for {env["SCRIPT_NAME"]})')
+
         if env['REQUEST_METHOD'] == 'GET' and self._get_path_components(env)[1].casefold() == 'exchangeRates'.casefold():
             self.refresh_data()
 
-        return super().__call__(env, start_response)
+        res = super().__call__(env, start_response)
 
-    @staticmethod
-    def refresh_data():
+        self._logger.info(f'Finished response (current handler: for {env["SCRIPT_NAME"]})')
+
+        return res
+
+    def _delegate_wsgi_call(self, env: dict, start_response: Callable):
+        self._logger.debug(f'Delegating call to {env["SCRIPT_NAME"]}')
+
+        return super()._delegate_wsgi_call(env, start_response)
+
+    def refresh_data(self):
         for updr in ER_UPDATERS:
             try:
                 do_update = updr.update_is_needed()
             except TypeError:
-                updr.update(app.main.NoRecordToModify)
-                continue
+                do_update = True
             if do_update:
                 updr.update(app.main.NoRecordToModify)
+                self._logger.info('Rates were updated successfully')
+
+    def set_logging_level(self, level):
+        self._logger.setLevel(level)
 
 
 application = CurrencyExchangeRatesWSGIApp()
 
 
 @application.at_route('/currencies')
-class CurrenciesHandler(WSGIApplication):
+class CurrenciesHandler(CurrencyExchangeRatesWSGIApp):
 
     def doGET(self, env, start_response):
+        self._logger.debug(f'Serving GET (current handler: for {env["SCRIPT_NAME"]})')
         query_res = [currency_as_dict(curr) for curr in coresrv.get_all_currencies()]
         json_data = json_dumpb(query_res)
 
@@ -93,6 +111,7 @@ class CurrenciesHandler(WSGIApplication):
         yield json_data
 
     def doPOST(self, env, start_response):
+        self._logger.debug(f'Serving POST (current handler: for {env["SCRIPT_NAME"]})')
         try:
             qd = self._parse_qsl(env, ('code', 'name', 'sign'))
         except ResponseProcessingError as e:
@@ -131,9 +150,10 @@ class CurrenciesHandler(WSGIApplication):
         yield json_dumpb(currency_as_dict(added_curr))
 
 
-class CurrencyHandler(WSGIApplication):
+class CurrencyHandler(CurrencyExchangeRatesWSGIApp):
 
     def doGET(self, env, start_response):
+        self._logger.debug(f'Serving GET (current handler: for {env["SCRIPT_NAME"]})')
         path_comps = self._get_path_components(env)
         curr_code = path_comps[0].upper()
 
@@ -182,9 +202,10 @@ class CurrencyHandler(WSGIApplication):
 
 
 @application.at_route('/exchangeRates')
-class ExchangeRatesHandler(WSGIApplication):
+class ExchangeRatesHandler(CurrencyExchangeRatesWSGIApp):
 
     def doGET(self, env, start_response):
+        self._logger.debug(f'Serving GET (current handler: for {env["SCRIPT_NAME"]})')
         try:
             rates = coresrv.get_all_exchange_rates()
         except app.main.sqlite3.Error as e:
@@ -213,6 +234,7 @@ class ExchangeRatesHandler(WSGIApplication):
         yield json_data
 
     def doPOST(self, env, start_response):
+        self._logger.debug(f'Serving POST (current handler: for {env["SCRIPT_NAME"]})')
         try:
             qd = self._parse_qsl(env, ('baseCurrencyCode', 'targetCurrencyCode', 'rate'))
         except ResponseProcessingError as e:
@@ -248,9 +270,10 @@ class ExchangeRatesHandler(WSGIApplication):
 
 
 @application.at_route('/exchangeRate')
-class ExchangeRateHandler(WSGIApplication):
+class ExchangeRateHandler(CurrencyExchangeRatesWSGIApp):
 
     def doGET(self, env, start_response):
+        self._logger.debug(f'Serving GET (current handler: for {env["SCRIPT_NAME"]})')
         try:
             query_rate = self._get_query_rate_from_url(env)
         except ResponseProcessingError as e:
@@ -277,6 +300,7 @@ class ExchangeRateHandler(WSGIApplication):
             yield json_data
 
     def doPATCH(self, env, start_response):
+        self._logger.debug(f'Serving PATCH (current handler: for {env["SCRIPT_NAME"]})')
         try:
             query_er = self._get_query_rate_from_url(env)
         except ResponseProcessingError as e:
@@ -324,9 +348,10 @@ class ExchangeRateHandler(WSGIApplication):
 
 
 @application.at_route('/exchange')
-class ExchangeHandler(WSGIApplication):
+class ExchangeHandler(CurrencyExchangeRatesWSGIApp):
 
     def doGET(self, env, start_response):
+        self._logger.debug(f'Serving GET (current handler: for {env["SCRIPT_NAME"]})')
         try:
             qd = self._parse_qsl({'wsgi.input': env['QUERY_STRING'].encode()}, ('from', 'to', 'amount'))
         except ResponseProcessingError as e:

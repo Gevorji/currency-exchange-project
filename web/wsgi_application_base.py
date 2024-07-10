@@ -21,31 +21,28 @@ class WSGIApplication:
         # path validness checking happens here (http error response)
         # self._get_handler == None is True -> 404 Not found
         path = env.get('PATH_INFO')
+        path_components: list = self._get_path_components(env)
 
         if not self._is_valid_path(path):
-            start_response(http_status_enum_to_string(HTTPStatus.BAD_REQUEST), tuple())
+            start_response(http_status_enum_to_string(HTTPStatus.BAD_REQUEST), [])
             return tuple()
 
-        if path == '/':
+        if len(path_components) == 1:
             method_name = env['REQUEST_METHOD']
-            handler = getattr(self, f'do{method_name}')
+            handler = getattr(self, f'do{method_name}', None)
 
             if not handler:
-                start_response(http_status_enum_to_string(HTTPStatus.NOT_IMPLEMENTED), tuple)
+                start_response(http_status_enum_to_string(HTTPStatus.NOT_IMPLEMENTED), [])
                 return tuple()
 
             result = self.call_with_exception_catch(handler, env, start_response)
-
             return result if result else tuple()
 
-        else:
-            path_components: list = self._get_path_components(env)
-            print(env)
-            new_env = env.copy()
-            new_env['SCRIPT_NAME'] = '/' + path_components[1]
-            new_env['PATH_INFO'] = '/' + '/'.join(path_components[2:])
+        new_env = env.copy()
+        new_env['SCRIPT_NAME'] = '/' + path_components[1]
+        new_env['PATH_INFO'] = '/' + '/'.join(path_components[2:])
 
-            return self._delegate_wsgi_call(new_env, start_response)
+        return self._delegate_wsgi_call(new_env, start_response)
 
     def _delegate_wsgi_call(self, env: dict, start_response: Callable):
 
@@ -91,6 +88,9 @@ class WSGIApplication:
     @staticmethod
     def _get_path_components(env):
         path_str = env.get('PATH_INFO')
+        if path_str == '/':
+            path_str = ''
+
         path_comps = path_str.split('/')
 
         if path_comps[0] != '':
