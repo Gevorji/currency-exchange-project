@@ -3,7 +3,7 @@ import json
 import sys
 from collections import OrderedDict
 from http import HTTPStatus
-from typing import Callable
+from typing import Callable, Iterable
 import logging
 import logging.config
 import web.apploggers as apploggers
@@ -61,9 +61,11 @@ class CurrencyExchangeRatesWSGIApp(WSGIApplication):
             '=Request arrived at {}=\nEnvironment:{}'
             .format(env['SCRIPT_NAME'], '\n\t'.join(str(itm) for itm in env.items()))
         )
-        self._logger.info(f'Starting response (current handler: for {env["SCRIPT_NAME"]})')
+        self._logger.info(
+            f'Starting response (current handler: for {env["SCRIPT_NAME"]}). Request at {env["PATH_INFO"]}'
+        )
 
-        if env['REQUEST_METHOD'] == 'GET' and self._get_path_components(env)[1].casefold() == 'exchangeRates'.casefold():
+        if env['REQUEST_METHOD'] == 'GET' and env['SCRIPT_NAME'].casefold() == 'exchangeRates'.casefold():
             self.refresh_data()
 
         res = super().__call__(env, start_response)
@@ -77,6 +79,15 @@ class CurrencyExchangeRatesWSGIApp(WSGIApplication):
 
         return super()._delegate_wsgi_call(env, start_response)
 
+    def call_with_exception_catch(self, func, env: dict, start_response: Callable):
+        try:
+            response: Iterable = func(env, start_response)
+        except Exception:
+            self._logger.error(msg='', exc_info=sys.exc_info())
+            start_response(http_status_enum_to_string(HTTPStatus.INTERNAL_SERVER_ERROR), [], sys.exc_info())
+        else:
+            return response
+
     def refresh_data(self):
         for updr in ER_UPDATERS:
             try:
@@ -86,6 +97,8 @@ class CurrencyExchangeRatesWSGIApp(WSGIApplication):
             if do_update:
                 updr.update(app.main.NoRecordToModify)
                 self._logger.info('Rates were updated successfully')
+            else:
+                self._logger.debug('Update not needed')
 
     def set_logging_level(self, level):
         self._logger.setLevel(level)

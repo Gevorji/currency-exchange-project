@@ -1,6 +1,6 @@
 import json
 import sys
-from urllib.parse import urlparse, parse_qsl
+from urllib.parse import urlparse, parse_qsl, unquote
 from urllib.error import URLError
 from typing import Callable, Iterable
 from http import HTTPStatus
@@ -72,7 +72,7 @@ class WSGIApplication:
         def recorder(handler):
             if not hasattr(handler, '__call__'):
                 raise TypeError('Handler should be callable')
-            if issubclass(self.__class__, handler):  # place an instance if decorated a class
+            if issubclass(handler, self.__class__):  # place an instance if decorated a class
                 handler = handler()
             self._handler_route_map[path] = handler
             if not case_sensitive:
@@ -92,9 +92,8 @@ class WSGIApplication:
             path_str = ''
 
         path_comps = path_str.split('/')
-
-        if path_comps[0] != '':
-            path_comps.insert(0, '')
+        path_comps = list(filter(None, path_comps))
+        path_comps.insert(0, '')
 
         return path_comps
 
@@ -121,16 +120,25 @@ class WSGIApplication:
             raise ResponseProcessingError(HTTPStatus.UNSUPPORTED_MEDIA_TYPE, 'Required x-www-form-urlencoded')
 
         try:
-            qd = dict(parse_qsl(env['wsgi.input'].read().decode(), strict_parsing=True))
+            qd = dict(tuple(
+                    (unquote(k), unquote(v)) for k, v in parse_qsl(
+                        env['wsgi.input'].read().decode(), strict_parsing=True
+                    )
+                )
+            )
 
             if required_fields:
-                if not set(required_fields) - set(qd.keys()) == set():
+                if set(required_fields) != set(qd.keys()):
                     raise AssertionError()
+            if not qd:
+                raise ValueError
 
         except ValueError:
             raise ResponseProcessingError(HTTPStatus.BAD_REQUEST, 'Bad x-www-form-urlencoded')
         except AssertionError:
-            raise ResponseProcessingError(HTTPStatus.BAD_REQUEST, 'Not enough or too many parameters')
+            raise ResponseProcessingError(
+                HTTPStatus.BAD_REQUEST, 'Not enough or too many parameters, or wrong parameter name'
+            )
         except UnicodeDecodeError:
             raise ResponseProcessingError(HTTPStatus.UNPROCESSABLE_ENTITY, 'Was not able to decode body')
 
