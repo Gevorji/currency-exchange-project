@@ -8,10 +8,7 @@ from app.data_objects import CurrencyRate, Currency
 app.connect_db('test.db')
 
 
-app.update_currency = partial(app.update_currency, commit_if_success=False)
-app.update_exchange_rate = partial(app.update_exchange_rate, commit_if_success=False)
-app.add_currency = partial(app.add_currency, commit_if_success=False)
-app.add_exchange_rate = partial(app.add_exchange_rate, commit_if_success=False)
+app.COMMIT_IF_SUCCESS = False
 
 
 def is_equal_data_objects(first: Currency | CurrencyRate, second: Currency | CurrencyRate, msg=None):

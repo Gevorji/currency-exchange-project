@@ -163,6 +163,7 @@ class CurrenciesHandler(CurrencyExchangeRatesWSGIApp):
         yield json_dumpb(currency_as_dict(added_curr))
 
 
+@application.at_route('/currency')
 class CurrencyHandler(CurrencyExchangeRatesWSGIApp):
 
     def doGET(self, env, start_response):
@@ -298,19 +299,25 @@ class ExchangeRateHandler(CurrencyExchangeRatesWSGIApp):
         )
 
         if rate:
-            start_response(
-                HTTPStatus.OK, (('Content-Type', 'application/json'),)
+            yield from self.do_json_error_response(
+                HTTPStatus.NOT_FOUND, [], start_response,
+                f'Rate for {query_rate.base_currency_code} - {query_rate.target_currency_code} not found'
             )
+            return
 
-            bcurr = currency_as_dict(coresrv.get_currency(Currency(None, rate.base_currency_code, None, None)))
-            tcurr = currency_as_dict(coresrv.get_currency(Currency(None, rate.target_currency_code, None, None)))
+        start_response(
+            HTTPStatus.OK, (('Content-Type', 'application/json'),)
+        )
 
-            drate = exch_rate_as_dict(rate)
-            drate['baseCurrency'] = bcurr
-            drate['targetCurrency'] = tcurr
+        bcurr = currency_as_dict(coresrv.get_currency(Currency(None, rate.base_currency_code, None, None)))
+        tcurr = currency_as_dict(coresrv.get_currency(Currency(None, rate.target_currency_code, None, None)))
 
-            json_data = json_dumpb(drate)
-            yield json_data
+        drate = exch_rate_as_dict(rate)
+        drate['baseCurrency'] = bcurr
+        drate['targetCurrency'] = tcurr
+
+        json_data = json_dumpb(drate)
+        yield json_data
 
     def doPATCH(self, env, start_response):
         self._logger.debug(f'Serving PATCH (current handler: for {env["SCRIPT_NAME"]})')
@@ -331,7 +338,7 @@ class ExchangeRateHandler(CurrencyExchangeRatesWSGIApp):
         try:
             updated_er = coresrv.update_exchange_rate(query_er)
         except app.main.NoRecordToModify:
-            msg = f'No record of {query_er.base_currency_code}-{query_er.target_currency_code} in database'
+            msg = f'Rate for {query_er.base_currency_code} - {query_er.target_currency_code} not found'
             yield from self.do_json_error_response(
                 HTTPStatus.NOT_FOUND, [], start_response, msg
             )

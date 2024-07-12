@@ -11,6 +11,8 @@ from app.main import (get_all_currencies, get_all_exchange_rates, get_currency,
 
 from app.data_updates import CurrencyRatesUpdater
 
+COMMIT_IF_SUCCESS = True
+
 pkg_dir = os.path.dirname(__file__)
 
 connection = None
@@ -32,11 +34,12 @@ connect_db(os.path.join(pkg_dir, configs['DEFAULT']['db_fname']))
 
 def wrapper_for_transaction(db_procedure):
     @wraps(db_procedure)
-    def transaction_wrapper(*args, commit_if_success=True, **kwargs):
+    def transaction_wrapper(*args, **kwargs):
         global connection
+        global COMMIT_IF_SUCCESS
         try:
             res = db_procedure(*args, **kwargs)
-            if commit_if_success:
+            if COMMIT_IF_SUCCESS:
                 connection.commit()
         except sqlite3.Error:
             connection.rollback()
