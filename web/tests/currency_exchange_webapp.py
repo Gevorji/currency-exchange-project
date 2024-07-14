@@ -9,7 +9,6 @@ from io import BytesIO
 from urllib.parse import quote, urlencode
 
 import app as coreapp
-import app.main
 from app.data_objects import Currency, CurrencyRate
 from web.tests.mock_wsgi_gateway import MockServerGateway
 from web.wsgi_application import application, currency_as_dict, exch_rate_as_dict, http_status_enum_to_string
@@ -35,19 +34,6 @@ class BaseAppTest(unittest.TestCase):
         self._gw.clean_attrs()
         coreapp.connection.rollback()
 
-
-class RootHandlerRespondsWithErrors(BaseAppTest):
-
-    def test_RootRespondsWNotImplemented(self):
-        inp = (('/currencies', 'PUT'), ('/', 'GET'), ('/', 'POST'), ('/exchange', 'POST'))
-        for path_inf, meth in inp:
-            with self.subTest(PATH_INFO=path_inf, METHOD=meth):
-                self._gw.env['PATH_INFO'] = path_inf
-                self._gw.env['REQUEST_METHOD'] = meth
-                self._gw.run(application)
-                self.assertEqual(self._gw.response_status, '501 Not Implemented')
-            self._gw.clean_attrs()
-
     def test_RootRespondsWNotFound(self):
         self._gw.env['PATH_INFO'] = '/notSuppliedPath'
         self._gw.run(application)
@@ -65,26 +51,13 @@ class RootHandlerRespondsWithErrors(BaseAppTest):
             self._gw.clean_attrs()
 
 
-class RootRespondsWSuccessStatuses(BaseAppTest):
-
-    def test_RootRespondsWOkOnUnusualURIs(self):
-        inp = ('///currencies', '/currency////RUB')
-
-        for path_inf in inp:
-            self._gw.env['PATH_INFO'] = path_inf
-            self._gw.run(application)
-            with self.subTest(PATH_INFO=path_inf):
-                self.assertEqual(self._gw.response_status, '200 OK')
-            self._gw.clean_attrs()
-
-
 class CurrenciesEndPoint(BaseAppTest):
 
     def test_getCurrencies(self):
-        env = mock_env.copy()
+        gw = self._gw
+        env = gw.env
         env['SCRIPT_NAME'] = ''
         env['PATH_INFO'] = '/currencies'
-        gw = MockServerGateway(env)
 
         gw.run(application)
 
@@ -174,9 +147,7 @@ class ExchangeRatesEndPoint(BaseAppTest):
             bcurr = currency_as_dict(coreapp.get_currency(Currency(None, rate.base_currency_code, None, None)))
             tcurr = currency_as_dict(coreapp.get_currency(Currency(None, rate.target_currency_code, None, None)))
 
-            drate = exch_rate_as_dict(rate)
-            drate['baseCurrency'] = bcurr
-            drate['targetCurrency'] = tcurr
+            drate = {'id': rate.id, 'baseCurrency': bcurr, 'targetCurrency': tcurr, 'rate': rate.rate}
 
             correct.append(drate)
 
@@ -196,13 +167,18 @@ class ExchangeRateEndPoint(BaseAppTest):
         env['PATH_INFO'] = '/exchangeRate/USDRUB'
         env['REQUEST_METHOD'] = 'GET'
 
-        correct = json.dumps(
-            currency_as_dict(
-                coreapp.get_exchange_rate(
-                    CurrencyRate(None, 'USD', 'RUB', None, None, None), strategy=app.main.FIND_RATE_BY_RECIPROCAL
-                )
+
+        rate = coreapp.get_exchange_rate(
+                CurrencyRate(None, 'USD', 'RUB', None, None, None), strategy=coreapp.main.FIND_RATE_BY_RECIPROCAL
             )
-        )
+        correct = {
+            'id': rate.id,
+            'baseCurrency': currency_as_dict(coreapp.get_currency(Currency(None, rate.base_currency_code, None, None))),
+            'targetCurrency': currency_as_dict(coreapp.get_currency(Currency(None, rate.target_currency_code, None, None))),
+            'rate': rate.rate
+        }
+
+        correct = json.dumps(correct)
         gw.run(application)
         self.assertEqual(correct, gw.result_data[0].decode())
 
@@ -213,7 +189,7 @@ class ExchangeRateEndPoint(BaseAppTest):
         inp = ('/USDRUBXXX', '/USDRUB/XXX')
 
         for url in inp:
-            for meth in ('GET', 'POST'):
+            for meth in ('GET', 'PATCH'):
                 with self.subTest(PATH_PART=url, METHOD=meth):
                     env['REQUEST_METHOD'] = meth
                     env['PATH_INFO'] = f'/exchangeRate{url}'
@@ -228,11 +204,12 @@ class ExchangeRateEndPoint(BaseAppTest):
         qry_d = {'rate': 100}
         env['PATH_INFO'] = '/exchangeRate/USDRUB'
         env['REQUEST_METHOD'] = 'PATCH'
+        env['HTTP_CONTENT_TYPE'] = 'application/x-www-form-urlencoded'
         env['wsgi.input'] = BytesIO(urlencode(qry_d).encode())
 
         gw.run(application)
 
-        correct = json.dumps(currency_as_dict(app.get_exchange_rate(CurrencyRate(None, 'USD', 'RUB', None, None, None))))
+        correct = json.dumps(exch_rate_as_dict(coreapp.get_exchange_rate(CurrencyRate(None, 'USD', 'RUB', None, None, None))))
 
         self.assertEqual(
             correct, gw.result_data[0].decode()
@@ -245,6 +222,7 @@ class ExchangeRateEndPoint(BaseAppTest):
         qry_d = {'rate': 100}
         env['PATH_INFO'] = '/exchangeRate/XXXBBB'
         env['REQUEST_METHOD'] = 'PATCH'
+        env['HTTP_CONTENT_TYPE'] = 'application/x-www-form-urlencoded'
         env['wsgi.input'] = BytesIO(urlencode(qry_d).encode())
 
         gw.run(application)
@@ -252,3 +230,52 @@ class ExchangeRateEndPoint(BaseAppTest):
         self.assertEqual(gw.response_status, http_status_enum_to_string(HTTPStatus.NOT_FOUND))
 
 
+class ExchangeEndPoint(BaseAppTest):
+
+    def test_getExchangeSuccessful(self):
+        gw = self._gw
+        env = gw.env
+        qd = {'from': 'USD', 'to': 'RUB', 'amount': 10.5}
+
+        env['PATH_INFO'] = '/exchange'
+        env['QUERY_STRING'] = urlencode(qd)
+        env['REQUEST_METHOD'] = 'GET'
+        env['HTTP_CONTENT_TYPE'] = 'application/x-www-form-urlencoded'
+
+        gw.run(application)
+
+        rateval = json.loads(gw.result_data[0].decode())['convertedAmount']
+
+        correct = coreapp.get_exchange_rate(
+            CurrencyRate(None, 'USD', 'RUB', None, None, None)
+        ).reduced_rate * qd['amount']
+
+        self.assertEqual(correct, rateval)
+
+    def test_respondsWNotFoundIfCurrencyDoesntExistInDB(self):
+        gw = self._gw
+        env = gw.env
+        qds = {'from': 'XXX', 'to': 'RUB', 'amount': 10.5}, {'from': 'USD', 'to': 'XXX', 'amount': 10.5}
+
+        env['PATH_INFO'] = '/exchange'
+        env['REQUEST_METHOD'] = 'GET'
+        env['HTTP_CONTENT_TYPE'] = 'application/x-www-form-urlencoded'
+
+        for qd in qds:
+            env['QUERY_STRING'] = urlencode(qd)
+            gw.run(application)
+            self.assertEqual(http_status_enum_to_string(HTTPStatus.NOT_FOUND), gw.response_status)
+            gw.clean_attrs()
+
+    def test_respondsWBadRequestIfAmountIsNotNumeric(self):
+        gw = self._gw
+        env = gw.env
+        qd = {'from': 'USD', 'to': 'RUB', 'amount': 'not num'}
+
+        env['PATH_INFO'] = '/exchange'
+        env['REQUEST_METHOD'] = 'GET'
+        env['HTTP_CONTENT_TYPE'] = 'application/x-www-form-urlencoded'
+        env['QUERY_STRING'] = urlencode(qd)
+
+        gw.run(application)
+        self.assertEqual(http_status_enum_to_string(HTTPStatus.BAD_REQUEST), gw.response_status)

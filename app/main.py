@@ -213,9 +213,12 @@ def get_exchange_rate(rate: CurrencyRate, *, strategy: int = 0):
             SELECT currency_id
             FROM currency
             WHERE code IN (?, ?)
-            ''', (params['base_currency_code'], params['target_currency_code']))
+            ''', (params['base_currency_code'], params['target_currency_code'])).fetchall()
 
-        base_id, target_id = tuple(rec[0] for rec in ids.fetchall())
+        if len(ids) != 2:
+            return None
+
+        base_id, target_id = tuple(rec[0] for rec in ids)
 
         sql = '''
             WITH common_cur AS 

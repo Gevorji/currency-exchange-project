@@ -1,5 +1,6 @@
 import json
 import sys
+from types import FunctionType
 from urllib.parse import urlparse, parse_qsl, unquote
 from urllib.error import URLError
 from typing import Callable, Iterable
@@ -38,24 +39,27 @@ class WSGIApplication:
             result = self.call_with_exception_catch(handler, env, start_response)
             return result if result else tuple()
 
-        new_env = env.copy()
-        new_env['SCRIPT_NAME'] = '/' + path_components[1]
-        new_env['PATH_INFO'] = '/' + '/'.join(path_components[2:])
-
-        return self._delegate_wsgi_call(new_env, start_response)
+        return self._delegate_wsgi_call(env, start_response)
 
     def _delegate_wsgi_call(self, env: dict, start_response: Callable):
+        path_components = self._get_path_components(env)
 
-        handler = self._get_handler(env['SCRIPT_NAME'])
+        inner_handler = getattr(self, f'do{env["REQUEST_METHOD"]}', None)
+        outer_handler = self._get_handler(f'/{path_components[1]}')
 
-        if not handler:
-            start_response(http_status_enum_to_string(HTTPStatus.NOT_FOUND), [('Content-Type', 'text/plain')])
-            supplied = ', '.join(self._handler_route_map.keys())
-            return (f'Cant serve request to {env["SCRIPT_NAME"]}. Supplied paths on this app: {supplied}'.encode(),)
+        if inner_handler:
+            return self.call_with_exception_catch(inner_handler, env, start_response)
 
-        result = self.call_with_exception_catch(handler, env, start_response)
+        if outer_handler:
+            new_env = env.copy()
+            new_env['SCRIPT_NAME'] = '/' + path_components[1]
+            new_env['PATH_INFO'] = '/' + '/'.join(path_components[2:])
 
-        return result if result else tuple()
+            return self.call_with_exception_catch(outer_handler, new_env, start_response)
+
+        start_response(http_status_enum_to_string(HTTPStatus.NOT_FOUND), [('Content-Type', 'text/plain')])
+        supplied = ', '.join(self._handler_route_map.keys())
+        return (f'Cant serve request to {env["SCRIPT_NAME"]}. Supplied paths on this app: {supplied}'.encode(),)
 
     def _get_handler(self, path: str):
         if path == '':
@@ -72,8 +76,13 @@ class WSGIApplication:
         def recorder(handler):
             if not hasattr(handler, '__call__'):
                 raise TypeError('Handler should be callable')
-            if issubclass(handler, self.__class__):  # place an instance if decorated a class
-                handler = handler()
+            if not isinstance(handler, FunctionType):
+                if issubclass(handler, self.__class__):  # place an instance if decorated a class
+                    handler = handler()
+                else:
+                    raise AssertionError(
+                        'Handler, if is implemented as a class, must be a descendant of WSGIApplication'
+                    )
             self._handler_route_map[path] = handler
             if not case_sensitive:
                 self._handler_route_map[path.lower()] = handler
@@ -133,17 +142,16 @@ class WSGIApplication:
             if not qd:
                 raise ValueError
 
-        except ValueError:
+        except ValueError as e:
+            if isinstance(e, UnicodeDecodeError):
+                raise ResponseProcessingError(HTTPStatus.UNPROCESSABLE_ENTITY, 'Was not able to decode body')
             raise ResponseProcessingError(HTTPStatus.BAD_REQUEST, 'Bad x-www-form-urlencoded')
         except AssertionError:
             raise ResponseProcessingError(
                 HTTPStatus.BAD_REQUEST, 'Not enough or too many parameters, or wrong parameter name'
             )
-        except UnicodeDecodeError:
-            raise ResponseProcessingError(HTTPStatus.UNPROCESSABLE_ENTITY, 'Was not able to decode body')
 
         return qd
-
 
 
 class ResponseProcessingError(Exception):

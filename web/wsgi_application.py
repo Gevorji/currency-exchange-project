@@ -3,6 +3,7 @@ import json
 import sys
 from collections import OrderedDict
 from http import HTTPStatus
+from io import BytesIO
 from typing import Callable, Iterable
 import logging
 import logging.config
@@ -45,7 +46,7 @@ def currency_as_dict(curr: Currency):
 
 
 def exch_rate_as_dict(er: CurrencyRate):
-    d = dataclass_as_specified_dict(er, ('id', 'base_currency_id', 'target_currency_id', 'rate'))
+    d = dataclass_as_specified_dict(er, ('id', 'base_currency_code', 'target_currency_code', 'rate'))
     substitute_keys(d, EXCHANGE_RATE_FIELDS_MAPPING)
     return d
 
@@ -169,42 +170,30 @@ class CurrencyHandler(CurrencyExchangeRatesWSGIApp):
     def doGET(self, env, start_response):
         self._logger.debug(f'Serving GET (current handler: for {env["SCRIPT_NAME"]})')
         path_comps = self._get_path_components(env)
-        curr_code = path_comps[0].upper()
+        curr_code = path_comps[1].upper()
 
         if len(path_comps) != 2:
-            headers = []
-            json_msg = json_dumpb(
-                {'message': 'Exactly one currency code should be provided as an endpoint of this resource'}
+            yield from self.do_json_error_response(
+                HTTPStatus.BAD_REQUEST, [], start_response,
+                'Exactly one currency code should be provided as an endpoint of this resource'
             )
-            headers.append(('Content-Type', 'text/json'))
-
-            yield from self.do_json_error_response(HTTPStatus.BAD_REQUEST, headers, start_response, json_msg)
             return
 
         try:
             curr_query_obj = Currency(None, curr_code, None, None)
         except ValueError:
-            headers = []
-            json_msg = json_dumpb(
-                {'message': 'Invalid currency code (valid is 3 alphabetical characters)'}
-            )
-            headers.append(('Content-Type', 'text/json'))
-
             yield from self.do_json_error_response(
-                HTTPStatus.BAD_REQUEST, [('Content-Type', 'text/json'), ], start_response, json_msg
+                HTTPStatus.BAD_REQUEST, [], start_response,
+                'Invalid currency code (valid is 3 alphabetical characters)'
             )
             return
 
         curr_data_obj = coresrv.get_currency(curr_query_obj)
 
         if not curr_data_obj:
-            headers = []
-            json_msg = json_dumpb(
-                {'message': "Currency wasn't found"}
+            yield from self.do_json_error_response(
+                HTTPStatus.NOT_FOUND, [], start_response, "Currency wasn't found"
             )
-            headers.append(('Content-Type', 'text/json'))
-
-            yield from self.do_json_error_response(HTTPStatus.NOT_FOUND, headers, start_response, json_msg)
             return
 
         json_data = json_dumpb(currency_as_dict(curr_data_obj))
@@ -233,11 +222,9 @@ class ExchangeRatesHandler(CurrencyExchangeRatesWSGIApp):
             bcurr = currency_as_dict(coresrv.get_currency(Currency(None, rate.base_currency_code, None, None)))
             tcurr = currency_as_dict(coresrv.get_currency(Currency(None, rate.target_currency_code, None, None)))
 
-            drate = exch_rate_as_dict(rate)
-            drate['baseCurrency'] = bcurr
-            drate['targetCurrency'] = tcurr
+            drate = {'id': rate.id, 'baseCurrency': bcurr, 'targetCurrency': tcurr, 'rate': rate.rate}
 
-            er_list.append(rate)
+            er_list.append(drate)
 
         json_data = json_dumpb(er_list)
 
@@ -298,7 +285,7 @@ class ExchangeRateHandler(CurrencyExchangeRatesWSGIApp):
             query_rate, strategy=app.main.FIND_RATE_BY_RECIPROCAL | app.main.FIND_RATE_BY_COMMON_TARGET
         )
 
-        if rate:
+        if not rate:
             yield from self.do_json_error_response(
                 HTTPStatus.NOT_FOUND, [], start_response,
                 f'Rate for {query_rate.base_currency_code} - {query_rate.target_currency_code} not found'
@@ -312,9 +299,7 @@ class ExchangeRateHandler(CurrencyExchangeRatesWSGIApp):
         bcurr = currency_as_dict(coresrv.get_currency(Currency(None, rate.base_currency_code, None, None)))
         tcurr = currency_as_dict(coresrv.get_currency(Currency(None, rate.target_currency_code, None, None)))
 
-        drate = exch_rate_as_dict(rate)
-        drate['baseCurrency'] = bcurr
-        drate['targetCurrency'] = tcurr
+        drate = {'id': rate.id, 'baseCurrency': bcurr, 'targetCurrency': tcurr, 'rate': rate.rate}
 
         json_data = json_dumpb(drate)
         yield json_data
@@ -373,7 +358,13 @@ class ExchangeHandler(CurrencyExchangeRatesWSGIApp):
     def doGET(self, env, start_response):
         self._logger.debug(f'Serving GET (current handler: for {env["SCRIPT_NAME"]})')
         try:
-            qd = self._parse_qsl({'wsgi.input': env['QUERY_STRING'].encode()}, ('from', 'to', 'amount'))
+            qd = self._parse_qsl(
+                {
+                    'wsgi.input': BytesIO(env['QUERY_STRING'].encode()),
+                    'HTTP_CONTENT_TYPE': 'application/x-www-form-urlencoded'
+                },
+                ('from', 'to', 'amount')
+            )
         except ResponseProcessingError as e:
             yield from self.do_json_error_response(
                 HTTPStatus.BAD_REQUEST, [], start_response, 'Malformed query'
@@ -386,14 +377,14 @@ class ExchangeHandler(CurrencyExchangeRatesWSGIApp):
                 strategy=app.main.FIND_RATE_BY_RECIPROCAL | app.main.FIND_RATE_BY_COMMON_TARGET
             )
         except ValueError as e:
-            self.do_json_error_response(
+            yield from self.do_json_error_response(
                 HTTPStatus.BAD_REQUEST,
                 [], start_response,
-                f'Invalid currency codes: {e.args[1]}')
+                f'Invalid currency codes: {e.args[0]}')
             return
 
         if not rate:
-            self.do_json_error_response(
+            yield from self.do_json_error_response(
                 HTTPStatus.NOT_FOUND, [], start_response, 'No such exchange_rate'
             )
             return
@@ -401,13 +392,21 @@ class ExchangeHandler(CurrencyExchangeRatesWSGIApp):
         bcurr = coresrv.get_currency(Currency(None, rate.base_currency_code, None, None))
         tcurr = coresrv.get_currency(Currency(None, rate.target_currency_code, None, None))
 
-        conv_amount = rate * qd['amount']
+        try:
+            amount = float(qd['amount'])
+        except ValueError:
+            yield from self.do_json_error_response(
+                HTTPStatus.BAD_REQUEST, [], start_response, 'Amount value is not numeric'
+            )
+            return
+
+        conv_amount = rate.reduced_rate * amount
 
         response = {
             'baseCurrency': currency_as_dict(bcurr),
             'targetCurrency': currency_as_dict(tcurr),
             'rate': round(rate.rate, 2),
-            'amount': round(qd['amount', 2]),
+            'amount': round(amount, 2),
             'convertedAmount': round(conv_amount, 2)
         }
 
