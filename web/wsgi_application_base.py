@@ -117,7 +117,7 @@ class WSGIApplication:
     def do_json_error_response(self, code: HTTPStatus, headers: list, start_response, msg=None):
 
         headers.append(('Content-Type', 'application/json'))
-        start_response(http_status_enum_to_string(code), headers)
+        start_response(http_status_enum_to_string(code), headers, sys.exc_info())
 
         if msg:
             yield json.dumps({'message': msg}).encode()

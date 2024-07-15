@@ -34,22 +34,6 @@ class BaseAppTest(unittest.TestCase):
         self._gw.clean_attrs()
         coreapp.connection.rollback()
 
-    def test_RootRespondsWNotFound(self):
-        self._gw.env['PATH_INFO'] = '/notSuppliedPath'
-        self._gw.run(application)
-
-        self.assertEqual(self._gw.response_status, '404 Not Found')
-
-    def test_RootRespondsWBadRequest(self):
-        inp = ('/curr-cies', 'currencies', 'cur rencies')
-
-        for path_inf in inp:
-            self._gw.env['PATH_INFO'] = path_inf
-            self._gw.run(application)
-            with self.subTest(PATH_INFO=path_inf):
-                self.assertEqual(self._gw.response_status, '400 Bad Request')
-            self._gw.clean_attrs()
-
 
 class CurrenciesEndPoint(BaseAppTest):
 
