@@ -234,7 +234,7 @@ class ExchangeEndPoint(BaseAppTest):
             CurrencyRate(None, 'USD', 'RUB', None, None, None)
         ).reduced_rate * qd['amount']
 
-        self.assertEqual(correct, rateval)
+        self.assertEqual(round(correct, 2), rateval)
 
     def test_respondsWNotFoundIfCurrencyDoesntExistInDB(self):
         gw = self._gw

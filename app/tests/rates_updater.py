@@ -67,9 +67,11 @@ class CurrencyRatesUpdaterTest(unittest.TestCase):
 
         updated_er = cur.execute('select rate from exchange_rates where exchange_rate_id = 1').fetchone()[0]
         self.assertEqual(updated_er, rate)
-
-
-
+        # date of last appeal is inserted
+        self.assertEqual(
+            cur.execute('select last_appeal from rates_info_source where source_id = 1').fetchone()[0],
+            datetime.date.today().isoformat()
+        )
 
 if __name__ == '__main__':
     unittest.main()

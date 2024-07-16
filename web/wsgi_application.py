@@ -3,6 +3,7 @@ import json
 import sys
 from collections import OrderedDict
 from http import HTTPStatus
+from http.client import HTTPException
 from io import BytesIO
 from typing import Callable, Iterable
 import logging
@@ -66,8 +67,10 @@ class CurrencyExchangeRatesWSGIApp(WSGIApplication):
             f'Starting response (current handler: for {env["SCRIPT_NAME"]}). Request at {env["PATH_INFO"]}'
         )
 
-        if env['REQUEST_METHOD'] == 'GET' and env['SCRIPT_NAME'].casefold() == 'exchangeRates'.casefold():
+        if env['REQUEST_METHOD'] == 'GET' and env['SCRIPT_NAME'].casefold() == '/exchangeRates'.casefold():
             self.refresh_data()
+            if coresrv.COMMIT_IF_SUCCESS:
+                coresrv.connection.commit()
 
         res = super().__call__(env, start_response)
 
@@ -96,7 +99,12 @@ class CurrencyExchangeRatesWSGIApp(WSGIApplication):
             except TypeError:
                 do_update = True
             if do_update:
-                updr.update(app.main.NoRecordToModify)
+                try:
+                    updr.update(app.main.NoRecordToModify)
+                except HTTPException as e:
+                    self._logger.info(
+                        f'Update is needed ({updr.source_id}), but were not able to accomplish it due to problem: {e}'
+                    )
                 self._logger.info('Rates were updated successfully')
             else:
                 self._logger.debug('Update not needed')
@@ -199,7 +207,7 @@ class CurrencyHandler(CurrencyExchangeRatesWSGIApp):
         json_data = json_dumpb(currency_as_dict(curr_data_obj))
 
         headers = [('Content-Type', 'application/json')]
-        start_response(HTTPStatus.OK, headers)
+        start_response((http_status_enum_to_string(HTTPStatus.OK)), headers)
 
         yield json_data
 
@@ -222,14 +230,14 @@ class ExchangeRatesHandler(CurrencyExchangeRatesWSGIApp):
             bcurr = currency_as_dict(coresrv.get_currency(Currency(None, rate.base_currency_code, None, None)))
             tcurr = currency_as_dict(coresrv.get_currency(Currency(None, rate.target_currency_code, None, None)))
 
-            drate = {'id': rate.id, 'baseCurrency': bcurr, 'targetCurrency': tcurr, 'rate': rate.rate}
+            drate = {'id': rate.id, 'baseCurrency': bcurr, 'targetCurrency': tcurr, 'rate': round(rate.rate, 2)}
 
             er_list.append(drate)
 
         json_data = json_dumpb(er_list)
 
         start_response(
-            http_status_enum_to_string(HTTPStatus.OK), (('Content-Type', 'application/json'),)
+            http_status_enum_to_string(HTTPStatus.OK), [('Content-Type', 'application/json')]
         )
 
         yield json_data
@@ -264,7 +272,7 @@ class ExchangeRatesHandler(CurrencyExchangeRatesWSGIApp):
             return
 
         start_response(
-            http_status_enum_to_string(HTTPStatus.CREATED), (('Content-Type', 'application/json'),)
+            http_status_enum_to_string(HTTPStatus.CREATED), [('Content-Type', 'application/json')]
         )
 
         yield json_dumpb(exch_rate_as_dict(new_er))
@@ -293,13 +301,13 @@ class ExchangeRateHandler(CurrencyExchangeRatesWSGIApp):
             return
 
         start_response(
-            HTTPStatus.OK, (('Content-Type', 'application/json'),)
+            http_status_enum_to_string(HTTPStatus.OK), [('Content-Type', 'application/json')]
         )
 
         bcurr = currency_as_dict(coresrv.get_currency(Currency(None, rate.base_currency_code, None, None)))
         tcurr = currency_as_dict(coresrv.get_currency(Currency(None, rate.target_currency_code, None, None)))
 
-        drate = {'id': rate.id, 'baseCurrency': bcurr, 'targetCurrency': tcurr, 'rate': rate.rate}
+        drate = {'id': rate.id, 'baseCurrency': bcurr, 'targetCurrency': tcurr, 'rate': round(rate.rate)}
 
         json_data = json_dumpb(drate)
         yield json_data
@@ -330,7 +338,7 @@ class ExchangeRateHandler(CurrencyExchangeRatesWSGIApp):
             return
 
         start_response(
-            HTTPStatus.OK, (('Content-Type', 'application/json'),)
+            http_status_enum_to_string(HTTPStatus.OK), [('Content-Type', 'application/json')]
         )
 
         yield json_dumpb(exch_rate_as_dict(updated_er))
@@ -411,7 +419,7 @@ class ExchangeHandler(CurrencyExchangeRatesWSGIApp):
         }
 
         start_response(
-            HTTPStatus.OK, (('Content-Type', 'application/json'),)
+            http_status_enum_to_string(HTTPStatus.OK), [('Content-Type', 'application/json')]
         )
 
         yield json_dumpb(response)

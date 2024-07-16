@@ -84,6 +84,7 @@ class CurrencyRatesUpdater:
                 except on_nonexist_exc:
                     pass
             else:
+                rate.info_source = self.source_id
                 self._update_interface(rate)
 
         datestamp = datetime.date.today()
@@ -93,7 +94,6 @@ class CurrencyRatesUpdater:
         sql = '''UPDATE {table_name} 
         SET {last_appeal_data_field} = :datestamp 
         WHERE {pk_field} = :source_id'''.format(**details)
-        self._db_cursor.execute(sql, details)
 
     @classmethod
     def get_db_specs(cls):
