@@ -69,8 +69,6 @@ class CurrencyExchangeRatesWSGIApp(WSGIApplication):
 
         if env['REQUEST_METHOD'] == 'GET' and env['SCRIPT_NAME'].casefold() == '/exchangeRates'.casefold():
             self.refresh_data()
-            if coresrv.COMMIT_IF_SUCCESS:
-                coresrv.connection.commit()
 
         res = super().__call__(env, start_response)
 
@@ -79,7 +77,7 @@ class CurrencyExchangeRatesWSGIApp(WSGIApplication):
         return res
 
     def _delegate_wsgi_call(self, env: dict, start_response: Callable):
-        self._logger.debug(f'Delegating call to {env["SCRIPT_NAME"]}')
+        self._logger.debug(f'Delegating call to {env["PATH_INFO"]}')
 
         return super()._delegate_wsgi_call(env, start_response)
 
@@ -100,7 +98,7 @@ class CurrencyExchangeRatesWSGIApp(WSGIApplication):
                 do_update = True
             if do_update:
                 try:
-                    updr.update(app.main.NoRecordToModify)
+                    updr.update(app.main.NoRecordToModify, commit_last_appeal_record=True)
                 except HTTPException as e:
                     self._logger.info(
                         f'Update is needed ({updr.source_id}), but were not able to accomplish it due to problem: {e}'
@@ -108,6 +106,10 @@ class CurrencyExchangeRatesWSGIApp(WSGIApplication):
                 self._logger.info('Rates were updated successfully')
             else:
                 self._logger.debug('Update not needed')
+
+    def do_json_error_response(self, code: HTTPStatus, headers: list, start_response, msg=None):
+        self._logger.error(str(sys.exc_info()[2]))
+        return super().do_json_error_response(code, headers, start_response, msg)
 
     def set_logging_level(self, level):
         self._logger.setLevel(level)
@@ -307,7 +309,7 @@ class ExchangeRateHandler(CurrencyExchangeRatesWSGIApp):
         bcurr = currency_as_dict(coresrv.get_currency(Currency(None, rate.base_currency_code, None, None)))
         tcurr = currency_as_dict(coresrv.get_currency(Currency(None, rate.target_currency_code, None, None)))
 
-        drate = {'id': rate.id, 'baseCurrency': bcurr, 'targetCurrency': tcurr, 'rate': round(rate.rate)}
+        drate = {'id': rate.id, 'baseCurrency': bcurr, 'targetCurrency': tcurr, 'rate': round(rate.rate, 2)}
 
         json_data = json_dumpb(drate)
         yield json_data
@@ -369,7 +371,7 @@ class ExchangeHandler(CurrencyExchangeRatesWSGIApp):
             qd = self._parse_qsl(
                 {
                     'wsgi.input': BytesIO(env['QUERY_STRING'].encode()),
-                    'HTTP_CONTENT_TYPE': 'application/x-www-form-urlencoded'
+                    'CONTENT_TYPE': 'application/x-www-form-urlencoded'
                 },
                 ('from', 'to', 'amount')
             )

@@ -125,7 +125,7 @@ class WSGIApplication:
             return
 
     def _parse_qsl(self, env: dict, required_fields: list | tuple = None) -> dict:
-        if env.get('HTTP_CONTENT_TYPE') != 'application/x-www-form-urlencoded':
+        if env.get('CONTENT_TYPE') != 'application/x-www-form-urlencoded':
             raise ResponseProcessingError(HTTPStatus.UNSUPPORTED_MEDIA_TYPE, 'Required x-www-form-urlencoded')
 
         try:

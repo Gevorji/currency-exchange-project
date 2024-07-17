@@ -60,7 +60,7 @@ class CurrenciesEndPoint(BaseAppTest):
         env['PATH_INFO'] = '/currencies'
         env['REQUEST_METHOD'] = 'POST'
         env['wsgi.input'] = BytesIO(qry_url_encoded.encode())
-        env['HTTP_CONTENT_TYPE'] = 'application/x-www-form-urlencoded'
+        env['CONTENT_TYPE'] = 'application/x-www-form-urlencoded'
 
         gw.run(application)
 
@@ -79,7 +79,7 @@ class CurrenciesEndPoint(BaseAppTest):
         env['PATH_INFO'] = '/currencies'
         env['REQUEST_METHOD'] = 'POST'
         env['wsgi.input'] = BytesIO(qry_url_encoded.encode())
-        env['HTTP_CONTENT_TYPE'] = 'application/x-www-form-urlencoded'
+        env['CONTENT_TYPE'] = 'application/x-www-form-urlencoded'
 
         gw.run(application)
 
@@ -131,7 +131,7 @@ class ExchangeRatesEndPoint(BaseAppTest):
             bcurr = currency_as_dict(coreapp.get_currency(Currency(None, rate.base_currency_code, None, None)))
             tcurr = currency_as_dict(coreapp.get_currency(Currency(None, rate.target_currency_code, None, None)))
 
-            drate = {'id': rate.id, 'baseCurrency': bcurr, 'targetCurrency': tcurr, 'rate': rate.rate}
+            drate = {'id': rate.id, 'baseCurrency': bcurr, 'targetCurrency': tcurr, 'rate': round(rate.rate, 2)}
 
             correct.append(drate)
 
@@ -151,7 +151,6 @@ class ExchangeRateEndPoint(BaseAppTest):
         env['PATH_INFO'] = '/exchangeRate/USDRUB'
         env['REQUEST_METHOD'] = 'GET'
 
-
         rate = coreapp.get_exchange_rate(
                 CurrencyRate(None, 'USD', 'RUB', None, None, None), strategy=coreapp.main.FIND_RATE_BY_RECIPROCAL
             )
@@ -159,7 +158,7 @@ class ExchangeRateEndPoint(BaseAppTest):
             'id': rate.id,
             'baseCurrency': currency_as_dict(coreapp.get_currency(Currency(None, rate.base_currency_code, None, None))),
             'targetCurrency': currency_as_dict(coreapp.get_currency(Currency(None, rate.target_currency_code, None, None))),
-            'rate': rate.rate
+            'rate': round(rate.rate, 2)
         }
 
         correct = json.dumps(correct)
@@ -188,7 +187,7 @@ class ExchangeRateEndPoint(BaseAppTest):
         qry_d = {'rate': 100}
         env['PATH_INFO'] = '/exchangeRate/USDRUB'
         env['REQUEST_METHOD'] = 'PATCH'
-        env['HTTP_CONTENT_TYPE'] = 'application/x-www-form-urlencoded'
+        env['CONTENT_TYPE'] = 'application/x-www-form-urlencoded'
         env['wsgi.input'] = BytesIO(urlencode(qry_d).encode())
 
         gw.run(application)
@@ -206,7 +205,7 @@ class ExchangeRateEndPoint(BaseAppTest):
         qry_d = {'rate': 100}
         env['PATH_INFO'] = '/exchangeRate/XXXBBB'
         env['REQUEST_METHOD'] = 'PATCH'
-        env['HTTP_CONTENT_TYPE'] = 'application/x-www-form-urlencoded'
+        env['CONTENT_TYPE'] = 'application/x-www-form-urlencoded'
         env['wsgi.input'] = BytesIO(urlencode(qry_d).encode())
 
         gw.run(application)
@@ -224,7 +223,7 @@ class ExchangeEndPoint(BaseAppTest):
         env['PATH_INFO'] = '/exchange'
         env['QUERY_STRING'] = urlencode(qd)
         env['REQUEST_METHOD'] = 'GET'
-        env['HTTP_CONTENT_TYPE'] = 'application/x-www-form-urlencoded'
+        env['CONTENT_TYPE'] = 'application/x-www-form-urlencoded'
 
         gw.run(application)
 
@@ -243,7 +242,7 @@ class ExchangeEndPoint(BaseAppTest):
 
         env['PATH_INFO'] = '/exchange'
         env['REQUEST_METHOD'] = 'GET'
-        env['HTTP_CONTENT_TYPE'] = 'application/x-www-form-urlencoded'
+        env['CONTENT_TYPE'] = 'application/x-www-form-urlencoded'
 
         for qd in qds:
             env['QUERY_STRING'] = urlencode(qd)
@@ -258,7 +257,7 @@ class ExchangeEndPoint(BaseAppTest):
 
         env['PATH_INFO'] = '/exchange'
         env['REQUEST_METHOD'] = 'GET'
-        env['HTTP_CONTENT_TYPE'] = 'application/x-www-form-urlencoded'
+        env['CONTENT_TYPE'] = 'application/x-www-form-urlencoded'
         env['QUERY_STRING'] = urlencode(qd)
 
         gw.run(application)

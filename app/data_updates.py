@@ -1,5 +1,6 @@
 import sqlite3
 import datetime
+import sys
 from typing import Callable
 
 from app.data_objects import CurrencyRate
@@ -73,27 +74,33 @@ class CurrencyRatesUpdater:
         res = self._db_cursor.execute(sql, (self.source_id,)).fetchone()
         return res[0]
 
-    def update(self, on_nonexist_exc=None):
+    def update(self, on_nonexist_exc=None, *, commit_last_appeal_record=False):
         path = self.get_path_to_source()
         data = self.fetch_data(path)
 
+        update_happened = False
         for rate in data:
-            if on_nonexist_exc:
-                try:
-                    self._update_interface(rate)
-                except on_nonexist_exc:
-                    pass
-            else:
+            try:
                 rate.info_source = self.source_id
                 self._update_interface(rate)
+                update_happened = True
+            except:
+                if on_nonexist_exc and isinstance(sys.exception(), on_nonexist_exc):
+                    pass
+                else:
+                    raise
 
-        datestamp = datetime.date.today()
-        details = self._db_details.copy()
-        details['datestamp'] = datestamp
-        details['source_id'] = self.source_id
-        sql = '''UPDATE {table_name} 
-        SET {last_appeal_data_field} = :datestamp 
-        WHERE {pk_field} = :source_id'''.format(**details)
+        if update_happened:
+            datestamp = datetime.date.today()
+            details = self._db_details.copy()
+            details['datestamp'] = datestamp
+            details['source_id'] = self.source_id
+            sql = '''UPDATE {table_name} 
+            SET {last_appeal_data_field} = :datestamp 
+            WHERE {pk_field} = :source_id'''.format(**details)
+            self._db_cursor.execute(sql, details)
+            if commit_last_appeal_record:
+                self._db_cursor.execute('COMMIT')
 
     @classmethod
     def get_db_specs(cls):
