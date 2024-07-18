@@ -24,7 +24,9 @@ configs.read(os.path.join(pkg_dir, r'configs\dbconfigs.ini'))
 
 def connect_db(db_path):
     global connection
-    connection = sqlite3.connect(db_path, isolation_level='DEFERRED')
+    # have to disable same thread checking because apparently the majority of well known wsgi servers
+    # (like waitress, for example) run application in another thread, which causes sqlite API to raise an error
+    connection = sqlite3.connect(db_path, isolation_level='DEFERRED', check_same_thread=False)
     main.set_connection(connection)
     main.db_cursor.execute('PRAGMA foreign_keys(1)')
 

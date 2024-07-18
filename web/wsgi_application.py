@@ -377,7 +377,7 @@ class ExchangeHandler(CurrencyExchangeRatesWSGIApp):
             )
         except ResponseProcessingError as e:
             yield from self.do_json_error_response(
-                HTTPStatus.BAD_REQUEST, [], start_response, 'Malformed query'
+                HTTPStatus.BAD_REQUEST, [], start_response, e.args[1]
             )
             return
 
