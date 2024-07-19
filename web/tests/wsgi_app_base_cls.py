@@ -29,7 +29,7 @@ class ParseURLEncodedQuery(BaseAppTest):
             {'язык': 'русский'}, {quote('smile/'): quote('=)')}
         )
 
-        mockenv = {'HTTP_CONTENT_TYPE': 'application/x-www-form-urlencoded', }
+        mockenv = {'CONTENT_TYPE': 'application/x-www-form-urlencoded', }
 
         for qd in inp:
             query = urlencode({quote(k): quote(v) for k, v in qd.items()})
@@ -46,7 +46,7 @@ class ParseURLEncodedQuery(BaseAppTest):
 
         for qd in inp:
             query = urlencode(qd).encode()
-            mockenv = {'HTTP_CONTENT_TYPE': 'application/x-www-form-urlencoded', 'wsgi.input': BytesIO(query)}
+            mockenv = {'CONTENT_TYPE': 'application/x-www-form-urlencoded', 'wsgi.input': BytesIO(query)}
             with self.subTest(query=qd):
                 with self.assertRaises(ResponseProcessingError) as exctxt:
                     testapp._parse_qsl(mockenv, required_fields=('name', 'surname'))
@@ -55,7 +55,7 @@ class ParseURLEncodedQuery(BaseAppTest):
     def test_raisesErrorIfURLQueryIsBadlyEncoded(self):
         inp = ('', 'val', 'val%FF')
 
-        mockenv = {'HTTP_CONTENT_TYPE': 'application/x-www-form-urlencoded'}
+        mockenv = {'CONTENT_TYPE': 'application/x-www-form-urlencoded'}
 
         for query in inp:
             mockenv['wsgi.input'] = BytesIO(query.encode())
@@ -67,7 +67,7 @@ class ParseURLEncodedQuery(BaseAppTest):
 
     def test_raisesErrorIfBytesMalformed(self):
         mockenv = {
-            'HTTP_CONTENT_TYPE': 'application/x-www-form-urlencoded',
+            'CONTENT_TYPE': 'application/x-www-form-urlencoded',
             'wsgi.input': BytesIO(b'\x08\xFF\xDD\x0F')
         }
         with self.assertRaises(ResponseProcessingError) as exctxt:

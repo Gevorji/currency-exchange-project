@@ -21,6 +21,8 @@ application.set_logging_level('DEBUG')
 
 gw = MockServerGateway(mock_env)
 
+coreapp.connect_db('test.db')
+
 coreapp.COMMIT_IF_SUCCESS = False
 
 
@@ -114,6 +116,17 @@ class CurrencyEndPoint(BaseAppTest):
 
         self.assertEqual(gw.response_status, http_status_enum_to_string(HTTPStatus.NOT_FOUND))
 
+    def test_respondsWNotImplemented(self):
+        gw = self._gw
+        env = gw.env
+
+        env['PATH_INFO'] = '/currency/XXX'
+        env['REQUEST_METHOD'] = 'PUT'
+
+        gw.run(application)
+
+        self.assertEqual(gw.response_status, http_status_enum_to_string(HTTPStatus.NOT_IMPLEMENTED))
+
 
 class ExchangeRatesEndPoint(BaseAppTest):
 
@@ -140,6 +153,42 @@ class ExchangeRatesEndPoint(BaseAppTest):
         self.assertEqual(
             correct, gw.result_data[0].decode()
         )
+
+    def test_postExchangeRatesSuccessfull(self):
+        gw = self._gw
+        env = gw.env
+        qd = {'baseCurrencyCode': 'USD', 'targetCurrencyCode': 'BTC', 'rate': 5000}
+
+        env['PATH_INFO'] = '/exchangeRates'
+        env['CONTENT_TYPE'] = 'application/x-www-form-urlencoded'
+        env['REQUEST_METHOD'] = 'POST'
+        env['wsgi.input'] = BytesIO(urlencode(qd).encode())
+
+        gw.run(application)
+
+        correct = CurrencyRate(
+            coreapp.connection.execute('select max(exchange_rate_id) from exchange_rates').fetchone()[0],
+            'USD', 'BTC', None, float(5000), None
+        )
+
+        correct = json.dumps(exch_rate_as_dict(correct)).encode()
+
+        self.assertEqual(gw.result_data[0], correct)
+
+    def test_postExchangeRatesWhenCurrencyDoesntExistInDb(self):
+        gw = self._gw
+        env = gw.env
+        qd = {'baseCurrencyCode': 'NNN', 'targetCurrencyCode': 'RUB', 'rate': 95}
+
+        env['PATH_INFO'] = '/exchangeRates'
+        env['CONTENT_TYPE'] = 'application/x-www-form-urlencoded'
+        env['REQUEST_METHOD'] = 'POST'
+        env['wsgi.input'] = BytesIO(urlencode(qd).encode())
+
+        gw.run(application)
+
+        self.assertEqual(gw.response_status, http_status_enum_to_string(HTTPStatus.NOT_FOUND))
+
 
 
 class ExchangeRateEndPoint(BaseAppTest):
@@ -212,6 +261,19 @@ class ExchangeRateEndPoint(BaseAppTest):
 
         self.assertEqual(gw.response_status, http_status_enum_to_string(HTTPStatus.NOT_FOUND))
 
+    def test_respondsWNotImplemented(self):
+        gw = self._gw
+        env = gw.env
+
+        qry_d = {'rate': 100}
+        env['PATH_INFO'] = '/exchangeRate/XXXBBB'
+        env['REQUEST_METHOD'] = 'POST'
+        env['CONTENT_TYPE'] = 'application/x-www-form-urlencoded'
+        env['wsgi.input'] = BytesIO(urlencode(qry_d).encode())
+
+        gw.run(application)
+
+        self.assertEqual(gw.response_status, http_status_enum_to_string(HTTPStatus.NOT_IMPLEMENTED))
 
 class ExchangeEndPoint(BaseAppTest):
 

@@ -26,7 +26,8 @@ def connect_db(db_path):
     global connection
     # have to disable same thread checking because apparently the majority of well known wsgi servers
     # (like waitress, for example) run application in another thread, which causes sqlite API to raise an error
-    connection = sqlite3.connect(db_path, isolation_level='DEFERRED', check_same_thread=False)
+    # connection = sqlite3.connect(db_path, isolation_level='DEFERRED', check_same_thread=False)
+    connection = sqlite3.connect(db_path, check_same_thread=False)
     main.set_connection(connection)
     main.db_cursor.execute('PRAGMA foreign_keys(1)')
 
@@ -40,11 +41,12 @@ def wrapper_for_transaction(db_procedure):
         global connection
         global COMMIT_IF_SUCCESS
         try:
+            connection.execute('BEGIN')
             res = db_procedure(*args, **kwargs)
             if COMMIT_IF_SUCCESS:
-                connection.commit()
-        except sqlite3.Error:
-            connection.rollback()
+                connection.execute('COMMIT')
+        except:
+            connection.execute('ROLLBACK')
             raise
 
         return res

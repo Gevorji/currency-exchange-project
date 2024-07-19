@@ -177,10 +177,16 @@ class CurrenciesHandler(CurrencyExchangeRatesWSGIApp):
 @application.at_route('/currency')
 class CurrencyHandler(CurrencyExchangeRatesWSGIApp):
 
+    def __call__(self, env, start_response):
+        if not self._get_inner_handler(env['REQUEST_METHOD']):
+            yield from self.do_json_error_response(HTTPStatus.NOT_IMPLEMENTED, [], start_response)
+            return
+
+        yield from super().__call__(env, start_response)
+
     def doGET(self, env, start_response):
         self._logger.debug(f'Serving GET (current handler: for {env["SCRIPT_NAME"]})')
         path_comps = self._get_path_components(env)
-        curr_code = path_comps[1].upper()
 
         if len(path_comps) != 2:
             yield from self.do_json_error_response(
@@ -188,6 +194,8 @@ class CurrencyHandler(CurrencyExchangeRatesWSGIApp):
                 'Exactly one currency code should be provided as an endpoint of this resource'
             )
             return
+
+        curr_code = path_comps[1].upper()
 
         try:
             curr_query_obj = Currency(None, curr_code, None, None)
@@ -253,6 +261,13 @@ class ExchangeRatesHandler(CurrencyExchangeRatesWSGIApp):
             return
 
         try:
+            qd['rate'] = float(qd['rate'])
+        except ValueError:
+            yield from self.do_json_error_response(
+                HTTPStatus.BAD_REQUEST, [], start_response, 'Rate should be a numeric value'
+            )
+
+        try:
             new_er = coresrv.add_exchange_rate(
                 CurrencyRate(None, qd['baseCurrencyCode'], qd['targetCurrencyCode'], 1, qd['rate'], None)
             )
@@ -266,10 +281,11 @@ class ExchangeRatesHandler(CurrencyExchangeRatesWSGIApp):
                 HTTPStatus.CONFLICT, [], start_response, e.args[0]
             )
             return
-        except app.main.QueryError:
-            msg = 'One or more currencies is not present at applications database'
+
+        if not new_er:
             yield from self.do_json_error_response(
-                HTTPStatus.NOT_FOUND, [], start_response, msg
+                HTTPStatus.NOT_FOUND, [], start_response,
+                'One or more currencies is not present at applications database'
             )
             return
 
@@ -282,6 +298,13 @@ class ExchangeRatesHandler(CurrencyExchangeRatesWSGIApp):
 
 @application.at_route('/exchangeRate')
 class ExchangeRateHandler(CurrencyExchangeRatesWSGIApp):
+
+    def __call__(self, env, start_response):
+        if not self._get_inner_handler(env['REQUEST_METHOD']):
+            yield from self.do_json_error_response(HTTPStatus.NOT_IMPLEMENTED, [], start_response)
+            return
+
+        yield from super().__call__(env, start_response)
 
     def doGET(self, env, start_response):
         self._logger.debug(f'Serving GET (current handler: for {env["SCRIPT_NAME"]})')
@@ -328,6 +351,13 @@ class ExchangeRateHandler(CurrencyExchangeRatesWSGIApp):
             yield from self.do_json_error_response(e.args[0], [], start_response, e.args[1])
             return
 
+        try:
+            qd['rate'] = float(qd['rate'])
+        except ValueError:
+            yield from self.do_json_error_response(
+                HTTPStatus.BAD_REQUEST, [], start_response, 'Rate should be a numeric value'
+            )
+
         query_er.rate = qd['rate']
 
         try:
@@ -349,7 +379,7 @@ class ExchangeRateHandler(CurrencyExchangeRatesWSGIApp):
         path_comps = self._get_path_components(env)
 
         if len(path_comps) != 2 or len(path_comps[1]) != 6:
-            msg = 'Exactly 1 currency pair in for XXXXXX should be provided as an endpoint for this resource'
+            msg = 'Exactly 1 currency pair in form XXXXXX should be provided as an endpoint for this resource'
             raise ResponseProcessingError(HTTPStatus.BAD_REQUEST, msg)
 
         bcode, tcode = path_comps[1][:3].upper(), path_comps[1][3:].upper()
@@ -406,7 +436,7 @@ class ExchangeHandler(CurrencyExchangeRatesWSGIApp):
             amount = float(qd['amount'])
         except ValueError:
             yield from self.do_json_error_response(
-                HTTPStatus.BAD_REQUEST, [], start_response, 'Amount value is not numeric'
+                HTTPStatus.BAD_REQUEST, [], start_response, 'Amount should be a numeric value'
             )
             return
 

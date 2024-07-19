@@ -27,8 +27,11 @@ class CurrencyRate(FieldValidizer):
     @property
     def reduced_rate(self):
 
-        if self.rate and self.units is None:
-            return self.rate
+        if self.rate:
+            if self.units is None:
+                return self.rate
+        else:
+            return None
         return self.rate/self.units
 
     @property
@@ -39,7 +42,11 @@ class CurrencyRate(FieldValidizer):
     @property
     def r_reciprocal_rate(self):
 
-        if self.rate and self.units is None:
-            return 1/self.rate
+        if self.rate:
+            if self.units is None:
+                return 1/self.rate
+        else:
+            return None
+
         return self.units/self.rate
 

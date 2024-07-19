@@ -20,7 +20,6 @@ class WSGIApplication:
 
     def __call__(self, env: dict, start_response: Callable):
         # path validness checking happens here (http error response)
-        # self._get_handler == None is True -> 404 Not found
         path = env.get('PATH_INFO')
         path_components: list = self._get_path_components(env)
 
@@ -28,34 +27,29 @@ class WSGIApplication:
             start_response(http_status_enum_to_string(HTTPStatus.BAD_REQUEST), [])
             return tuple()
 
-        if len(path_components) == 1:
-            method_name = env['REQUEST_METHOD']
-            handler = getattr(self, f'do{method_name}', None)
+        handler = self._get_inner_handler(env['REQUEST_METHOD'])
 
-            if not handler:
-                start_response(http_status_enum_to_string(HTTPStatus.NOT_IMPLEMENTED), [])
-                return tuple()
-
+        if handler:
             result = self.call_with_exception_catch(handler, env, start_response)
             return result if result else tuple()
+
+        elif len(path_components) == 1:
+            start_response(http_status_enum_to_string(HTTPStatus.NOT_IMPLEMENTED), [])
+            return tuple()
 
         return self._delegate_wsgi_call(env, start_response)
 
     def _delegate_wsgi_call(self, env: dict, start_response: Callable):
         path_components = self._get_path_components(env)
 
-        inner_handler = getattr(self, f'do{env["REQUEST_METHOD"]}', None)
-        outer_handler = self._get_handler(f'/{path_components[1]}')
+        handler = self._get_handler(f'/{path_components[1]}')
 
-        if inner_handler:
-            return self.call_with_exception_catch(inner_handler, env, start_response)
-
-        if outer_handler:
+        if handler:
             new_env = env.copy()
             new_env['SCRIPT_NAME'] = '/' + path_components[1]
             new_env['PATH_INFO'] = '/' + '/'.join(path_components[2:])
 
-            return self.call_with_exception_catch(outer_handler, new_env, start_response)
+            return self.call_with_exception_catch(handler, new_env, start_response)
 
         start_response(http_status_enum_to_string(HTTPStatus.NOT_FOUND), [('Content-Type', 'text/plain')])
         supplied = ', '.join(self._handler_route_map.keys())
@@ -153,6 +147,8 @@ class WSGIApplication:
 
         return qd
 
+    def _get_inner_handler(self, method_name: str):
+        return getattr(self, f'do{method_name}', None)
 
 class ResponseProcessingError(Exception):
     """Raised by internal procedures for generalized error response constructing"""

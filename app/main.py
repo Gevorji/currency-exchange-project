@@ -344,7 +344,6 @@ def add_exchange_rate(rate: CurrencyRate):
         RETURNING *'''
 
     try:
-        db_cursor.execute('BEGIN')
         res = db_cursor.execute(sql, params).fetchone()
     except sqlite3.Error as e:
         if e.sqlite_errorcode == 2067:
