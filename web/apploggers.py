@@ -1,4 +1,5 @@
 import logging
+import os
 import sys
 
 def make_filter(level):
@@ -7,6 +8,13 @@ def make_filter(level):
         return True if logrec.levelno <= getattr(logging, level) else False
 
     return log_filter
+
+
+root_app_dir = os.path.split(os.path.dirname(__file__))[0]
+print(root_app_dir)
+
+if not os.path.exists(os.path.join(root_app_dir, 'logs')):
+    log_dir = os.path.split(os.path.dirname(__file__))[0]
 
 
 logconfig = {
