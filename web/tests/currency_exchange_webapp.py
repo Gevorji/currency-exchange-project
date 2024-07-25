@@ -137,7 +137,9 @@ class ExchangeRatesEndPoint(BaseAppTest):
         env['PATH_INFO'] = '/exchangeRates'
         env['REQUEST_METHOD'] = 'GET'
 
+        coreapp.COMMIT_IF_SUCCESS = True
         gw.run(application)
+        coreapp.COMMIT_IF_SUCCESS = False
 
         correct = []
         for rate in coreapp.get_all_exchange_rates():

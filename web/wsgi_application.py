@@ -1,6 +1,7 @@
 import dataclasses
 import json
 import sys
+import urllib.error
 from collections import OrderedDict
 from http import HTTPStatus
 from http.client import HTTPException
@@ -56,7 +57,7 @@ logging.config.dictConfig(apploggers.logconfig)
 
 
 class CurrencyExchangeRatesWSGIApp(WSGIApplication):
-    _logger = logging.getLogger('currencyExchangeApp')
+    _logger = logging.getLogger(apploggers.APP_LOGGER_NAME)
 
     def __call__(self, env, start_response):
         self._logger.debug(
@@ -68,7 +69,10 @@ class CurrencyExchangeRatesWSGIApp(WSGIApplication):
         )
 
         if env['REQUEST_METHOD'] == 'GET' and env['SCRIPT_NAME'].casefold() == '/exchangeRates'.casefold():
-            self.refresh_data()
+            try:
+                self.refresh_data()
+            except urllib.error.URLError:
+                pass
 
         res = super().__call__(env, start_response)
 
