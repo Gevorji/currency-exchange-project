@@ -1,5 +1,5 @@
-import json
 import sys
+from collections import namedtuple
 from types import FunctionType
 from urllib.parse import urlparse, parse_qsl, unquote
 from urllib.error import URLError
@@ -8,8 +8,10 @@ from http import HTTPStatus
 import re
 
 
-def http_status_enum_to_string(status: HTTPStatus):
-    return f'{status.value} {status.phrase}'
+ResponseContext = namedtuple(
+        'ResponseContext',
+        ['env', 'headers_set', 'headers_sent', 'orig_start_response', 'own_start_response']
+    )
 
 
 class WSGIApplication:
@@ -24,20 +26,30 @@ class WSGIApplication:
         path_components: list = self._get_path_components(env)
 
         if not self._is_valid_path(path):
-            start_response(http_status_enum_to_string(HTTPStatus.BAD_REQUEST), [])
-            return tuple()
+            raise ResponseProcessingError(HTTPStatus.BAD_REQUEST)
 
-        handler = self._get_inner_handler(env['REQUEST_METHOD'])
+        inner_handler = self._get_inner_handler(env['REQUEST_METHOD'])
 
-        if handler:
-            result = self.call_with_exception_catch(handler, env, start_response)
-            return result if result else tuple()
+        self.set_new_response_context(env, start_response)
 
-        elif len(path_components) == 1:
-            start_response(http_status_enum_to_string(HTTPStatus.NOT_IMPLEMENTED), [])
-            return tuple()
+        try:
+            if inner_handler:
+                result = inner_handler()
+                yield from self.start_response_giveaway(result)
+                return
 
-        return self._delegate_wsgi_call(env, start_response)
+            elif len(path_components) == 1:
+                raise ResponseProcessingError(HTTPStatus.NOT_IMPLEMENTED)
+        except Exception as e:
+            yield from self.do_error_response(e)
+            return
+
+        try:
+            yield from self._delegate_wsgi_call(env, start_response)
+            return
+        except Exception as e:
+            yield from self.do_error_response(e)
+            return
 
     def _delegate_wsgi_call(self, env: dict, start_response: Callable):
         path_components = self._get_path_components(env)
@@ -49,11 +61,12 @@ class WSGIApplication:
             new_env['SCRIPT_NAME'] = '/' + path_components[1]
             new_env['PATH_INFO'] = '/' + '/'.join(path_components[2:])
 
-            return self.call_with_exception_catch(handler, new_env, start_response)
+            return handler(new_env, start_response)
 
-        start_response(http_status_enum_to_string(HTTPStatus.NOT_FOUND), [('Content-Type', 'text/plain')])
         supplied = ', '.join(self._handler_route_map.keys())
-        return (f'Cant serve request to {env["SCRIPT_NAME"]}. Supplied paths on this app: {supplied}'.encode(),)
+        raise ResponseProcessingError(
+            HTTPStatus.NOT_FOUND, f'Cant serve request to {env["SCRIPT_NAME"]}. Supplied paths on this app: {supplied}'
+        )
 
     def _get_handler(self, path: str):
         if path == '':
@@ -70,8 +83,10 @@ class WSGIApplication:
         def recorder(handler):
             if not hasattr(handler, '__call__'):
                 raise TypeError('Handler should be callable')
+            cls = None
             if not isinstance(handler, FunctionType):
                 if issubclass(handler, self.__class__):  # place an instance if decorated a class
+                    cls = handler
                     handler = handler()
                 else:
                     raise AssertionError(
@@ -81,7 +96,7 @@ class WSGIApplication:
             if not case_sensitive:
                 self._handler_route_map[path.lower()] = handler
                 self._handler_route_map[path.upper()] = handler
-            return handler
+            return cls or handler
 
         return recorder
 
@@ -99,24 +114,6 @@ class WSGIApplication:
         path_comps.insert(0, '')
 
         return path_comps
-
-    def call_with_exception_catch(self, func, env: dict, start_response: Callable):
-        try:
-            response: Iterable = func(env, start_response)
-        except Exception:
-            start_response(http_status_enum_to_string(HTTPStatus.INTERNAL_SERVER_ERROR), [], sys.exc_info())
-        else:
-            return response
-
-    def do_json_error_response(self, code: HTTPStatus, headers: list, start_response, msg=None):
-
-        headers.append(('Content-Type', 'application/json'))
-        start_response(http_status_enum_to_string(code), headers, sys.exc_info())
-
-        if msg:
-            yield json.dumps({'message': msg}).encode()
-        else:
-            return
 
     def _parse_qsl(self, env: dict, required_fields: list | tuple = None) -> dict:
         if env.get('CONTENT_TYPE') != 'application/x-www-form-urlencoded':
@@ -150,8 +147,77 @@ class WSGIApplication:
     def _get_inner_handler(self, method_name: str):
         return getattr(self, f'do{method_name}', None)
 
+    def make_own_start_response(self, headers_set: list, headers_sent: list):
+
+        def start_response(status, headers, exc_info=None):
+            nonlocal headers_set, headers_sent
+            if exc_info:
+                try:
+                    if headers_sent:
+                        # Re-raise original exception if headers sent
+                        raise exc_info[1].with_traceback(exc_info[2])
+                finally:
+                    exc_info = None
+            elif headers_set:
+                raise AssertionError("Headers already set!")
+
+            headers_set[:] = status, headers
+
+        return start_response
+
+    def modify_headers(self, env, headers):
+        pass
+
+    def modify_error_response_headers(self, e, headers):
+        pass
+
+    def process_data(self, data):
+        return data
+
+    def process_status(self, status):
+        return status
+
+    def do_error_response(self, e):
+        rc = self.resp_ctxt
+        env, headers = rc.env, rc.headers_set
+        if isinstance(e, ResponseProcessingError):
+            status = e.status
+            msg = e.msg
+        else:
+            status = HTTPStatus.INTERNAL_SERVER_ERROR
+            msg = e.args[0]
+
+        if headers and isinstance(headers[0], HTTPStatus):
+            headers = headers[1:]
+        self.modify_error_response_headers(e, headers)
+        rc.orig_start_response(status, headers, sys.exc_info())
+
+        yield msg
+
+    def start_response_giveaway(self, result):
+        rc = self.resp_ctxt
+        env, headers_set, headers_sent = rc.env, rc.headers_set, rc.headers_sent
+        for datapiece in result:
+            if not headers_set:
+                raise AssertionError('Write before start_response()')
+            if not headers_sent:
+                status, headers_sent = headers_set[:]
+                self.modify_headers(env, headers_sent)
+                if not isinstance(status, HTTPStatus):
+                    raise AssertionError('Status supposed to be an HTTPStatus enum member here')
+                rc.orig_start_response(self.process_status(status), list(headers_set))
+            yield self.process_data(datapiece)
+
+    def set_new_response_context(self, env, start_response):
+        headers_set = []
+        headers_sent = []
+        stresp = self.make_own_start_response(headers_set, headers_sent)
+        self.resp_ctxt = ResponseContext(env, headers_set, headers_sent, start_response, stresp)
+        return self.resp_ctxt
+
 class ResponseProcessingError(Exception):
     """Raised by internal procedures for generalized error response constructing"""
-    def __init__(self, status: HTTPStatus, msg: str):
-        self.args = status, msg
+    def __init__(self, status: HTTPStatus, msg: str = ''):
+        self.status = status
+        self.msg = msg
 
