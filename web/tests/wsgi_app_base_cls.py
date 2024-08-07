@@ -1,10 +1,9 @@
-from unittest import TestCase
 from urllib.parse import urlencode, quote
 from io import BytesIO
 from http import HTTPStatus
 
 from currency_exchange_webapp import BaseAppTest
-from web.wsgi_application_base import WSGIApplication, ResponseProcessingError
+from web.wsgi_app_bases.wsgi_application_base import WSGIApplication, ResponseProcessingError
 
 testapp = WSGIApplication()
 
@@ -97,5 +96,5 @@ class RootHandlerRespondsWithErrors(BaseAppTest):
                 self._gw.env['PATH_INFO'] = path_inf
                 self._gw.env['REQUEST_METHOD'] = meth
                 self._gw.run(testapp)
-                self.assertEqual(self._gw.response_status, '501 Not Implemented')
+                self.assertEqual(self._gw.response_status, HTTPStatus.NOT_IMPLEMENTED)
             self._gw.clean_attrs()

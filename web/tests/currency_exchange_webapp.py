@@ -10,8 +10,13 @@ from urllib.parse import quote, urlencode
 
 import app as coreapp
 from app.data_objects import Currency, CurrencyRate
+from web.data_objects import ExchangeRate
 from web.tests.mock_wsgi_gateway import MockServerGateway
-from web.wsgi_application import application, currency_as_dict, exch_rate_as_dict, http_status_enum_to_string
+from web.wsgi_application import application
+from web.views import (
+    json_currency, json_currencies, json_exchange_rate,
+    json_exchange_rates, json_converted_rate, http_status_enum_to_string
+)
 
 mock_env = {}
 
@@ -47,7 +52,7 @@ class CurrenciesEndPoint(BaseAppTest):
 
         gw.run(application)
 
-        correct = json.dumps(list(currency_as_dict(cur) for cur in coreapp.get_all_currencies()))
+        correct = json_currencies(coreapp.get_all_currencies())
 
         self.assertEqual(gw.result_data[0].decode(), correct)
 
@@ -98,7 +103,7 @@ class CurrencyEndPoint(BaseAppTest):
         env['REQUEST_METHOD'] = 'GET'
 
         gw.run(application)
-        correct = json.dumps(currency_as_dict(coreapp.get_currency(Currency(None, 'RUB', None, None))))
+        correct = json_currency(coreapp.get_currency(Currency(None, 'RUB', None, None)))
 
         self.assertEqual(
             correct,
@@ -143,14 +148,14 @@ class ExchangeRatesEndPoint(BaseAppTest):
 
         correct = []
         for rate in coreapp.get_all_exchange_rates():
-            bcurr = currency_as_dict(coreapp.get_currency(Currency(None, rate.base_currency_code, None, None)))
-            tcurr = currency_as_dict(coreapp.get_currency(Currency(None, rate.target_currency_code, None, None)))
+            bcurr = coreapp.get_currency(Currency(None, rate.base_currency_code, None, None))
+            tcurr = coreapp.get_currency(Currency(None, rate.target_currency_code, None, None))
 
-            drate = {'id': rate.id, 'baseCurrency': bcurr, 'targetCurrency': tcurr, 'rate': round(rate.rate, 2)}
+            er = ExchangeRate(rate.id, bcurr, tcurr, round(rate.rate, 2))
 
-            correct.append(drate)
+            correct.append(er)
 
-        correct = json.dumps(correct)
+        correct = json_exchange_rates(correct)
 
         self.assertEqual(
             correct, gw.result_data[0].decode()
@@ -168,14 +173,16 @@ class ExchangeRatesEndPoint(BaseAppTest):
 
         gw.run(application)
 
-        correct = CurrencyRate(
+        correct_rate = ExchangeRate(
             coreapp.connection.execute('select max(exchange_rate_id) from exchange_rates').fetchone()[0],
-            'USD', 'BTC', None, float(5000), None
+            coreapp.get_currency(Currency(None, 'USD', None, None)),
+            coreapp.get_currency(Currency(None, 'BTC', None, None)),
+            float(5000)
         )
 
-        correct = json.dumps(exch_rate_as_dict(correct)).encode()
+        correct = json_exchange_rate(correct_rate)
 
-        self.assertEqual(gw.result_data[0], correct)
+        self.assertEqual(gw.result_data[0].decode(), correct)
 
     def test_postExchangeRatesWhenCurrencyDoesntExistInDb(self):
         gw = self._gw
@@ -192,7 +199,6 @@ class ExchangeRatesEndPoint(BaseAppTest):
         self.assertEqual(gw.response_status, http_status_enum_to_string(HTTPStatus.NOT_FOUND))
 
 
-
 class ExchangeRateEndPoint(BaseAppTest):
 
     def test_getExchangeRateSuccessful(self):
@@ -205,14 +211,15 @@ class ExchangeRateEndPoint(BaseAppTest):
         rate = coreapp.get_exchange_rate(
                 CurrencyRate(None, 'USD', 'RUB', None, None, None), strategy=coreapp.main.FIND_RATE_BY_RECIPROCAL
             )
-        correct = {
-            'id': rate.id,
-            'baseCurrency': currency_as_dict(coreapp.get_currency(Currency(None, rate.base_currency_code, None, None))),
-            'targetCurrency': currency_as_dict(coreapp.get_currency(Currency(None, rate.target_currency_code, None, None))),
-            'rate': round(rate.rate, 2)
-        }
 
-        correct = json.dumps(correct)
+        correct_rate = ExchangeRate(
+            rate.id,
+            coreapp.get_currency(Currency(None, rate.base_currency_code, None, None)),
+            coreapp.get_currency(Currency(None, rate.target_currency_code, None, None)),
+            round(rate.rate, 2)
+        )
+
+        correct = json_exchange_rate(correct_rate)
         gw.run(application)
         self.assertEqual(correct, gw.result_data[0].decode())
 
@@ -243,7 +250,15 @@ class ExchangeRateEndPoint(BaseAppTest):
 
         gw.run(application)
 
-        correct = json.dumps(exch_rate_as_dict(coreapp.get_exchange_rate(CurrencyRate(None, 'USD', 'RUB', None, None, None))))
+        rate = coreapp.get_exchange_rate(CurrencyRate(None, 'USD', 'RUB', None, None, None))
+        correct_rate = ExchangeRate(
+            rate.id,
+            coreapp.get_currency(Currency(None, 'USD', None, None)),
+            coreapp.get_currency(Currency(None, 'RUB', None, None)),
+            round(rate.rate, 2)
+        )
+
+        correct = json_exchange_rate(correct_rate)
 
         self.assertEqual(
             correct, gw.result_data[0].decode()
@@ -276,6 +291,7 @@ class ExchangeRateEndPoint(BaseAppTest):
         gw.run(application)
 
         self.assertEqual(gw.response_status, http_status_enum_to_string(HTTPStatus.NOT_IMPLEMENTED))
+
 
 class ExchangeEndPoint(BaseAppTest):
 
