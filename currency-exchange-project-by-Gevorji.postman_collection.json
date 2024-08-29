@@ -1,0 +1,674 @@
+{
+	"info": {
+		"_postman_id": "bc08540f-7d12-478a-86fb-645ba2fadb86",
+		"name": "currency-exchange-project-by-Gevorji",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "37051858"
+	},
+	"item": [
+		{
+			"name": "currencies",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "localhost:8000/currencies",
+					"host": [
+						"localhost"
+					],
+					"port": "8000",
+					"path": [
+						"currencies"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "currencies",
+			"protocolProfileBehavior": {
+				"disabledSystemHeaders": {}
+			},
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "urlencoded",
+					"urlencoded": [
+						{
+							"key": "name",
+							"value": "curname",
+							"type": "text"
+						},
+						{
+							"key": "code",
+							"value": "XXX",
+							"type": "text"
+						},
+						{
+							"key": "sign",
+							"value": "$&*",
+							"type": "text"
+						}
+					]
+				},
+				"url": {
+					"raw": "localhost:8000/currencies",
+					"host": [
+						"localhost"
+					],
+					"port": "8000",
+					"path": [
+						"currencies"
+					]
+				}
+			},
+			"response": [
+				{
+					"name": "currencies-required-field-abscent",
+					"originalRequest": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "urlencoded",
+							"urlencoded": [
+								{
+									"key": "name",
+									"value": "curname",
+									"type": "text"
+								},
+								{
+									"key": "code",
+									"value": "XXX",
+									"type": "text"
+								},
+								{
+									"key": "sign",
+									"value": "$&*",
+									"type": "text"
+								}
+							]
+						},
+						"url": {
+							"raw": "localhost:8000/currencies",
+							"host": [
+								"localhost"
+							],
+							"port": "8000",
+							"path": [
+								"currencies"
+							]
+						}
+					},
+					"_postman_previewlanguage": null,
+					"header": null,
+					"cookie": [],
+					"body": null
+				},
+				{
+					"name": "currencies-currency-exists",
+					"originalRequest": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "urlencoded",
+							"urlencoded": [
+								{
+									"key": "name",
+									"value": "curname",
+									"type": "text"
+								},
+								{
+									"key": "code",
+									"value": "XXX",
+									"type": "text"
+								},
+								{
+									"key": "sign",
+									"value": "$&*",
+									"type": "text"
+								}
+							]
+						},
+						"url": {
+							"raw": "localhost:8000/currencies",
+							"host": [
+								"localhost"
+							],
+							"port": "8000",
+							"path": [
+								"currencies"
+							]
+						}
+					},
+					"_postman_previewlanguage": null,
+					"header": null,
+					"cookie": [],
+					"body": null
+				}
+			]
+		},
+		{
+			"name": "currency",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "localhost:8000/currency/AMD",
+					"host": [
+						"localhost"
+					],
+					"port": "8000",
+					"path": [
+						"currency",
+						"AMD"
+					]
+				}
+			},
+			"response": [
+				{
+					"name": "currency-nonexisting",
+					"originalRequest": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "localhost:8000/currency/HHH",
+							"host": [
+								"localhost"
+							],
+							"port": "8000",
+							"path": [
+								"currency",
+								"HHH"
+							]
+						}
+					},
+					"_postman_previewlanguage": null,
+					"header": null,
+					"cookie": [],
+					"body": null
+				},
+				{
+					"name": "currency-no-code",
+					"originalRequest": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "localhost:8000/currency/AMD",
+							"host": [
+								"localhost"
+							],
+							"port": "8000",
+							"path": [
+								"currency",
+								"AMD"
+							]
+						}
+					},
+					"_postman_previewlanguage": null,
+					"header": null,
+					"cookie": [],
+					"body": null
+				}
+			]
+		},
+		{
+			"name": "exchangerates",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "localhost:8000/exchangeRates",
+					"host": [
+						"localhost"
+					],
+					"port": "8000",
+					"path": [
+						"exchangeRates"
+					]
+				}
+			},
+			"response": [
+				{
+					"name": "exchangerates",
+					"originalRequest": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "localhost:8000/exchangeRates",
+							"host": [
+								"localhost"
+							],
+							"port": "8000",
+							"path": [
+								"exchangeRates"
+							]
+						}
+					},
+					"_postman_previewlanguage": null,
+					"header": null,
+					"cookie": [],
+					"body": null
+				}
+			]
+		},
+		{
+			"name": "exchangerates",
+			"request": {
+				"method": "POST",
+				"header": []
+			},
+			"response": [
+				{
+					"name": "exchangerates-required-field-abscent",
+					"originalRequest": {
+						"method": "POST",
+						"header": []
+					},
+					"_postman_previewlanguage": null,
+					"header": null,
+					"cookie": [],
+					"body": null
+				},
+				{
+					"name": "exchangerates-wrong-field-name",
+					"originalRequest": {
+						"method": "POST",
+						"header": []
+					},
+					"_postman_previewlanguage": null,
+					"header": null,
+					"cookie": [],
+					"body": null
+				},
+				{
+					"name": "exchangerates-pair-exists",
+					"originalRequest": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/x-www-form-urlencoded",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "urlencoded",
+							"urlencoded": [
+								{
+									"key": "baseCurrencyCode",
+									"value": "AMD",
+									"type": "text"
+								},
+								{
+									"key": "targetCurrencyCode",
+									"value": "RUB",
+									"type": "text"
+								},
+								{
+									"key": "rate",
+									"value": "4",
+									"type": "text"
+								}
+							]
+						},
+						"url": {
+							"raw": "localhost:8000/exchangeRates",
+							"host": [
+								"localhost"
+							],
+							"port": "8000",
+							"path": [
+								"exchangeRates"
+							]
+						}
+					},
+					"_postman_previewlanguage": null,
+					"header": null,
+					"cookie": [],
+					"body": null
+				},
+				{
+					"name": "exchangerates-currency-non-existing",
+					"originalRequest": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/x-www-form-urlencoded",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "urlencoded",
+							"urlencoded": [
+								{
+									"key": "baseCurrencyCode",
+									"value": "NNN",
+									"type": "text"
+								},
+								{
+									"key": "targetCurrencyCode",
+									"value": "RUB",
+									"type": "text"
+								},
+								{
+									"key": "rate",
+									"value": "4",
+									"type": "text"
+								}
+							]
+						},
+						"url": {
+							"raw": "localhost:8000/exchangeRates",
+							"host": [
+								"localhost"
+							],
+							"port": "8000",
+							"path": [
+								"exchangeRates"
+							]
+						}
+					},
+					"_postman_previewlanguage": null,
+					"header": null,
+					"cookie": [],
+					"body": null
+				}
+			]
+		},
+		{
+			"name": "exchangerate",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "localhost:8000/exchangeRate/RUBAMD",
+					"host": [
+						"localhost"
+					],
+					"port": "8000",
+					"path": [
+						"exchangeRate",
+						"RUBAMD"
+					]
+				}
+			},
+			"response": [
+				{
+					"name": "exchangerate-invalid-currency-pair",
+					"originalRequest": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "localhost:8000/exchangeRate/XXXXXXXXd",
+							"host": [
+								"localhost"
+							],
+							"port": "8000",
+							"path": [
+								"exchangeRate",
+								"XXXXXXXXd"
+							]
+						}
+					},
+					"_postman_previewlanguage": null,
+					"header": null,
+					"cookie": [],
+					"body": null
+				},
+				{
+					"name": "exchangerate-no-currency-codes",
+					"originalRequest": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "localhost:8000/exchangeRate/XXXXXXXXd",
+							"host": [
+								"localhost"
+							],
+							"port": "8000",
+							"path": [
+								"exchangeRate",
+								"XXXXXXXXd"
+							]
+						}
+					},
+					"_postman_previewlanguage": null,
+					"header": null,
+					"cookie": [],
+					"body": null
+				},
+				{
+					"name": "exchangerate-not-found",
+					"originalRequest": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "localhost:8000/exchangeRate/RUBBTC",
+							"host": [
+								"localhost"
+							],
+							"port": "8000",
+							"path": [
+								"exchangeRate",
+								"RUBBTC"
+							]
+						}
+					},
+					"_postman_previewlanguage": null,
+					"header": null,
+					"cookie": [],
+					"body": null
+				}
+			]
+		},
+		{
+			"name": "exchangerate",
+			"request": {
+				"method": "PATCH",
+				"header": [],
+				"body": {
+					"mode": "urlencoded",
+					"urlencoded": [
+						{
+							"key": "rate",
+							"value": "5005",
+							"type": "text"
+						}
+					]
+				},
+				"url": {
+					"raw": "localhost:8000/exchangeRate/USDBTC",
+					"host": [
+						"localhost"
+					],
+					"port": "8000",
+					"path": [
+						"exchangeRate",
+						"USDBTC"
+					]
+				}
+			},
+			"response": [
+				{
+					"name": "exchangerate",
+					"originalRequest": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/x-www-form-urlencoded",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "urlencoded",
+							"urlencoded": [
+								{
+									"key": "rate",
+									"value": "5005",
+									"type": "text",
+									"disabled": true
+								}
+							]
+						},
+						"url": {
+							"raw": "localhost:8000/exchangeRate/USDBTC",
+							"host": [
+								"localhost"
+							],
+							"port": "8000",
+							"path": [
+								"exchangeRate",
+								"USDBTC"
+							]
+						}
+					},
+					"_postman_previewlanguage": null,
+					"header": null,
+					"cookie": [],
+					"body": null
+				},
+				{
+					"name": "exchangerate-non-existing-pair",
+					"originalRequest": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/x-www-form-urlencoded",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "urlencoded",
+							"urlencoded": [
+								{
+									"key": "rate",
+									"value": "5005",
+									"type": "text",
+									"disabled": true
+								}
+							]
+						},
+						"url": {
+							"raw": "localhost:8000/exchangeRate/USDBTC",
+							"host": [
+								"localhost"
+							],
+							"port": "8000",
+							"path": [
+								"exchangeRate",
+								"USDBTC"
+							]
+						}
+					},
+					"_postman_previewlanguage": null,
+					"header": null,
+					"cookie": [],
+					"body": null
+				}
+			]
+		},
+		{
+			"name": "exchange",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "localhost:8000/exchange?from=RUB&to=AMD&amount=1000",
+					"host": [
+						"localhost"
+					],
+					"port": "8000",
+					"path": [
+						"exchange"
+					],
+					"query": [
+						{
+							"key": "from",
+							"value": "RUB"
+						},
+						{
+							"key": "to",
+							"value": "AMD"
+						},
+						{
+							"key": "amount",
+							"value": "1000"
+						}
+					]
+				}
+			},
+			"response": [
+				{
+					"name": "exchange-request-on-nonexisting-currency",
+					"originalRequest": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "localhost:8000/exchange?from=KKK&to=SSS&amount=10",
+							"host": [
+								"localhost"
+							],
+							"port": "8000",
+							"path": [
+								"exchange"
+							],
+							"query": [
+								{
+									"key": "from",
+									"value": "KKK"
+								},
+								{
+									"key": "to",
+									"value": "SSS"
+								},
+								{
+									"key": "amount",
+									"value": "10"
+								}
+							]
+						}
+					},
+					"_postman_previewlanguage": null,
+					"header": null,
+					"cookie": [],
+					"body": null
+				},
+				{
+					"name": "exchange-not-enough-fields",
+					"originalRequest": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "localhost:8000/exchange?from=RUB&to=AMD",
+							"host": [
+								"localhost"
+							],
+							"port": "8000",
+							"path": [
+								"exchange"
+							],
+							"query": [
+								{
+									"key": "from",
+									"value": "RUB"
+								},
+								{
+									"key": "to",
+									"value": "AMD"
+								}
+							]
+						}
+					},
+					"_postman_previewlanguage": null,
+					"header": null,
+					"cookie": [],
+					"body": null
+				}
+			]
+		}
+	]
+}
